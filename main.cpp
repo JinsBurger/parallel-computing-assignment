@@ -1,7 +1,7 @@
 #include "simulator.h"
 #include "schedular.h"
 
-int main()
+int main(int argc, char *argv[])
 {
     constexpr int MAP_SIZE = 20;
     constexpr int NUM_ROBOT = 6;
@@ -10,8 +10,13 @@ int main()
     constexpr int WALL_DENSITY = 20;
     constexpr int TIME_MAX = MAP_SIZE * 100;
     constexpr int ROBOT_ENERGY = TIME_MAX * 6;
+    int parse_flag = 0;
     set<Coord> observed_coords;
     set<Coord> updated_coords;
+
+    if(argc == 2 && string(argv[1]) == "parse") {
+        parse_flag = 1;
+    }
 
     srand(static_cast<unsigned int>(time(NULL)));
 
@@ -37,6 +42,10 @@ int main()
         taskdispatcher.try_dispatch(time);
         observed_coords = map.observed_coord_by_robot();
         updated_coords = map.update_coords(observed_coords);
+
+        if(parse_flag) {
+            map.print_object_map();
+        }
 #ifdef VERBOSE
         cout << "Time : " << time << endl;
         map.print_object_map();

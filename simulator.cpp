@@ -198,7 +198,7 @@ void MAP::print_cost_map(ROBOT::TYPE type) const
 }
 void MAP::print_object_map() const
 {
-    cout << "Object map" << endl;
+    cout << "Start Object map" << endl;
     auto f = [this](int x, int y) -> void
     {
         auto obj = this->object_at(x, y);
@@ -264,6 +264,8 @@ void MAP::print_object_map() const
             cout << to_string(obj).substr(0, 3) << "|";
     };
     print_base(f);
+
+    cout << "End Object map" << endl;
 }
 void MAP::print_known_object_map() const
 {
