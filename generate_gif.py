@@ -76,6 +76,12 @@ class MAP_GIF:
         self.map_size = map_size
         self.trace_map = [[0 for _ in range(map_size)] for _ in range(map_size)]
         self.traces = {}
+        self.zorder = {
+            "WALL": 100,
+            "OBSERVED": 100,
+            "TRACE": 101,
+            "TEXT": 102
+        }
 
         # 어두운 색상 리스트
         color_names = get_dark_colors()
@@ -106,21 +112,26 @@ class MAP_GIF:
         
         # 격자 안에 문자 표시 (공백은 빈칸)
         for (i, j), obj in np.ndenumerate(state):
-            if obj == "WAL":
-                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black'))
+            obj_name = obj
+            if len(obj_name) > 0 and obj_name[0] == "@":
+                obj_name = obj_name[1:]
+
+            if obj_name in self.traces.keys():
+                self.trace_map[j][i] = obj_name
+
+            if obj_name == "WAL":
+                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', zorder=self.zorder["WALL"]))
             else:
               if self.trace_map[j][i] != 0:
-                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color=self.traces[self.trace_map[j][i]]))
+                ax.add_patch(plt.Rectangle((j - 0.4, i - 0.4), 0.8, 0.8, color=self.traces[self.trace_map[j][i]], zorder=self.zorder["TRACE"]))
 
               #Observed task
               if obj != '':
-                if obj[0] == '!':
-                  ax.text(j, i, obj, ha='center', va='center', fontsize=5,bbox=dict(facecolor='red', edgecolor='none', boxstyle='square,pad=0.3', alpha=0.3))
-                else:
-                  ax.text(j, i, obj, ha='center', va='center', fontsize=5, family='monospace')
+                if obj[0] == '@':
+                  ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', alpha=0.3, zorder=self.zorder["OBSERVED"]))
+                ax.text(j, i, obj_name, ha='center', va='center', fontsize=3, family='monospace', zorder=self.zorder["TEXT"])
             
-            if obj in self.traces.keys():
-                self.trace_map[j][i] = obj
+            
         
         plt.tight_layout(pad=0)
         
@@ -148,7 +159,7 @@ def parse_map(lines):
     return map
     
 if __name__ == '__main__':
-    #os.system(f"./MRTA parse > {MRTA_LOG_PATH}")
+    os.system(f"./MRTA parse > {MRTA_LOG_PATH}")
 
     map_gif = MAP_GIF("./rd0_230.gif", 30, traces=['RD0', 'RD3'])
     with open(MRTA_LOG_PATH, "r") as f:

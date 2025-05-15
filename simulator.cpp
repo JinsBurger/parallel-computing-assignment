@@ -211,8 +211,14 @@ void MAP::print_object_map() const
     auto f = [this](int x, int y) -> void
     {
         auto obj = this->object_at(x, y);
-        if (obj == OBJECT::EMPTY)
+
+        if(this->observed_map_at(x,y))
+            cout << "@";
+            
+        if (obj == OBJECT::EMPTY) {
             cout << "   |";
+        }
+            
         else if (obj == OBJECT::ROBOT)
         {
             cout << "R";
@@ -241,10 +247,10 @@ void MAP::print_object_map() const
             {
                 if ((*it)->coord == Coord(x, y) && !(*it)->is_done())
                 {
-                    if((int)this->known_object_at(x,y) & (int)OBJECT::TASK)
-                        cout << "!T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
-                    else
-                        cout << "T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
+                    // if((int)this->known_object_at(x,y) & (int)OBJECT::TASK)
+                    //     cout << "!T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
+                    // else
+                    cout << "T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
                     break;
                 }
             }
@@ -272,8 +278,9 @@ void MAP::print_object_map() const
             }
             cout << "|";
         }
-        else
+        else {
             cout << to_string(obj).substr(0, 3) << "|";
+        }
     };
     print_base(f);
 

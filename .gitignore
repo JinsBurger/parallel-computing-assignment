@@ -1,2 +1,4 @@
 *.o
 MRTA
+.gif
+.DS_Store

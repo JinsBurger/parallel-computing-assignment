@@ -437,10 +437,12 @@ public:
             {
                 for (int xx = max(x - viewrange, 0); xx < min(x + viewrange + 1, map_size); ++xx)
                 {
+                    this->observed_map[xx][y] = true;
                     observed_coord_set.emplace(xx, y);
                 }
                 for (int yy = max(y - viewrange, 0); yy < min(y + viewrange + 1, map_size); ++yy)
                 {
+                    this->observed_map[x][yy] = true;
                     observed_coord_set.emplace(x, yy);
                 }
             }
@@ -450,6 +452,7 @@ public:
                 {
                     for (int yy = max(y - viewrange, 0); yy < min(y + viewrange + 1, map_size); ++yy)
                     {
+                        this->observed_map[xx][yy] = true;
                         observed_coord_set.emplace(xx, yy);
                     }
                 }
@@ -534,6 +537,7 @@ private:
     vector<vector<int>> robot_num_map;
     vector<vector<vector<int>>> known_cost_map;
     vector<vector<OBJECT>> known_object_map;
+    vector<vector<bool>> observed_map;
     vector<shared_ptr<TASK>> active_tasks;
     set<Coord> previous_update;
 
@@ -546,6 +550,7 @@ private:
     const OBJECT known_object_at(Coord coord) const { return known_object_map[coord.x][coord.y]; }
     OBJECT &known_object_at(int x, int y) { return known_object_map[x][y]; }
     const OBJECT known_object_at(int x, int y) const { return known_object_map[x][y]; }
+    bool observed_map_at(int x, int y) const { return observed_map[x][y]; }
     vector<int> &cost_at(Coord coord) { return cost_map[coord.x][coord.y]; }
     const vector<int> &cost_at(Coord coord) const { return cost_map[coord.x][coord.y]; }
     int &cost_at(Coord coord, ROBOT::TYPE type) { return cost_at(coord)[static_cast<size_t>(type)]; }
@@ -567,6 +572,7 @@ private:
         robot_num_map = vector<vector<int>>(map_size, vector<int>(map_size, 0));
         known_cost_map = vector<vector<vector<int>>>(map_size, vector<vector<int>>(map_size, vector<int>(ROBOT::NUM_ROBOT_TYPE, -1)));
         known_object_map = vector<vector<OBJECT>>(map_size, vector<OBJECT>(map_size, OBJECT::UNKNOWN));
+        observed_map = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
 
         // generate terrein
         int droneCost = (rand() % 40 + 60) * 2;
