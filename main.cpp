@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
         updated_coords = map.update_coords(observed_coords);
 
         if(parse_flag) {
-            map.print_object_map();
+            map.print_object_map_if_changed(time);
         }
 #ifdef VERBOSE
         cout << "Time : " << time << endl;

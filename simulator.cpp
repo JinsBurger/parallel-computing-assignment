@@ -196,9 +196,18 @@ void MAP::print_cost_map(ROBOT::TYPE type) const
     };
     print_base(f);
 }
+
+void MAP::print_object_map_if_changed(int tick) {
+    if(is_object_map_changed) {
+        cout << "Start Object map: " << tick << endl;
+        print_object_map();
+        is_object_map_changed = 0;
+        cout << "End Object map" << endl;
+    }
+}
+
 void MAP::print_object_map() const
 {
-    cout << "Start Object map" << endl;
     auto f = [this](int x, int y) -> void
     {
         auto obj = this->object_at(x, y);
@@ -232,7 +241,10 @@ void MAP::print_object_map() const
             {
                 if ((*it)->coord == Coord(x, y) && !(*it)->is_done())
                 {
-                    cout << "T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
+                    if((int)this->known_object_at(x,y) & (int)OBJECT::TASK)
+                        cout << "!T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
+                    else
+                        cout << "T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
                     break;
                 }
             }
@@ -265,7 +277,6 @@ void MAP::print_object_map() const
     };
     print_base(f);
 
-    cout << "End Object map" << endl;
 }
 void MAP::print_known_object_map() const
 {

@@ -307,6 +307,7 @@ public:
     const int num_total_task;
     const int wall_density;
     const int time_max;
+    int is_object_map_changed = 0;
 
     // Constructor
     MAP(int map_size, int num_robot, int num_initial_task, int num_total_task, int wall_density, int robot_energy)
@@ -341,6 +342,7 @@ public:
         auto robot = robots.back();
 
         object_at(robot->coord) |= OBJECT::ROBOT;
+        is_object_map_changed = 1;
         robot_num_at(robot->coord) += 1;
         return robot;
     }
@@ -380,6 +382,7 @@ public:
     {
         if (robot.status == ROBOT::STATUS::MOVING && robot.energy > 0 && robot.remain_progress <= 0 && robot.coord != robot.target_coord)
         {
+            is_object_map_changed = 1;
             if ((robot_num_at(robot.coord) -= 1) == 0)
                 object_at(robot.coord) &= ~OBJECT::ROBOT;
             if ((robot_num_at(robot.target_coord) += 1) == 1)
@@ -393,6 +396,7 @@ public:
     // Public method for Task
     weak_ptr<TASK> create_task()
     {
+        is_object_map_changed = 1;
         Coord coord = get_random_empty_coord();
         tasks.emplace_back(make_shared<TASK>(coord, static_cast<int>(tasks.size()), *this));
         auto task = tasks.back();
@@ -516,6 +520,7 @@ public:
     void print_known_object_map() const;
     void print_robot_summary() const;
     void print_task_summary() const;
+    void print_object_map_if_changed(int tick);
 
 private:
     // Private variables
