@@ -153,7 +153,7 @@ class MAP_GIF:
         # 이미지로 저장
         plt.subplots_adjust(bottom=0.3)
         fig.text(0.5, 0.2, f"Tick: {tick}", ha='center', fontsize=12)
-        fig.text(0.5, 0.15, f"Observed: {observed_cnt} / {real_width}X{real_width} (%.2f%%)"%((observed_cnt/real_width**2)*100), ha='center', fontsize=7)
+        fig.text(0.5, 0.15, f"Observed: {observed_cnt} / {real_width}x{real_width} (%.2f%%)"%((observed_cnt/real_width**2)*100), ha='center', fontsize=7)
         if "max" in latest_task_info:
           tasks = task_info['tasks']
           fig.text(0.5, 0.1, f"Found tasks(MAX: {task_info['max']}): {task_info['found']} / {task_info['created']}", ha='center', fontsize=7)
