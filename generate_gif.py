@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import os
+import re
 import random
 
 
@@ -93,12 +94,14 @@ class MAP_GIF:
             self.traces[t] = color
             color_names.remove(color)
 
-    def add_object_map(self, map, tick):
+    def add_object_map(self, tick, map, observed_cnt, task_info):
         print(f"TICK: {tick}")
+      
 
         state = np.array(map)
         # 각 상태를 이미지로 그림
         fig, ax = plt.subplots(figsize=(4, 3), dpi=400)
+        real_width = len(map)
         
         # 바둑판 격자 테두리만 그리기 (패턴용)
         ax.set_xticks(np.arange(-0.5, state.shape[1], 1))
@@ -120,7 +123,12 @@ class MAP_GIF:
                 self.trace_map[j][i] = obj_name
 
             if obj_name == "WAL":
-                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', zorder=self.zorder["WALL"]))
+                if obj[0] == '@':
+                  ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', zorder=self.zorder["WALL"]))
+                else:
+                  #Not observed
+                  ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', alpha=0.3, zorder=self.zorder["WALL"]))
+                  ax.text(j, i, obj_name, ha='center', va='center', fontsize=3, family='monospace', zorder=self.zorder["TEXT"])
             else:
               if self.trace_map[j][i] != 0:
                 ax.add_patch(plt.Rectangle((j - 0.4, i - 0.4), 0.8, 0.8, color=self.traces[self.trace_map[j][i]], zorder=self.zorder["TRACE"]))
@@ -128,7 +136,14 @@ class MAP_GIF:
               #Observed task
               if obj != '':
                 if obj[0] == '@':
-                  ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', alpha=0.3, zorder=self.zorder["OBSERVED"]))
+                  '''
+                  The object names of found tasks start with `!`, e.g !T05
+                  If not, these tasks have been created later, but not observed yet.
+                  '''
+                  if len(obj_name) > 0 and obj_name[0] == 'T' and obj_name[1:].isnumeric():
+                      ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='blue', alpha=0.3, zorder=self.zorder["OBSERVED"]))
+                  else:
+                    ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', alpha=0.3, zorder=self.zorder["OBSERVED"]))
                 ax.text(j, i, obj_name, ha='center', va='center', fontsize=3, family='monospace', zorder=self.zorder["TEXT"])
             
             
@@ -136,14 +151,18 @@ class MAP_GIF:
         plt.tight_layout(pad=0)
         
         # 이미지로 저장
-        plt.subplots_adjust(bottom=0.1)
-        fig.text(0.5, 0.02, f"Tick: {tick}", ha='center', fontsize=12)
+        plt.subplots_adjust(bottom=0.3)
+        fig.text(0.5, 0.2, f"Tick: {tick}", ha='center', fontsize=12)
+        fig.text(0.5, 0.15, f"Observed: {observed_cnt} / {real_width}X{real_width} (%.2f%%)"%((observed_cnt/real_width**2)*100), ha='center', fontsize=7)
+        if "max" in latest_task_info:
+          tasks = task_info['tasks']
+          fig.text(0.5, 0.1, f"Found tasks(MAX: {task_info['max']}): {task_info['found']} / {task_info['created']}", ha='center', fontsize=7)
+          fig.text(0.5, 0.05, f"Not Found: {','.join([t for t in tasks if not tasks[t]['found']])}", ha='center', fontsize=7)
         fig.canvas.draw()
         img = np.array(fig.canvas.buffer_rgba())
         img = Image.fromarray(img)
         self.frames.append(img)
 
-        
         plt.close(fig)
     
     def save(self):
@@ -158,27 +177,74 @@ def parse_map(lines):
         map.append(row)
     return map
     
+def parse_task(lines):
+    max_task, created_task, active_task, completed_task = [int(k.split(":")[1].strip()) for k in lines[1].split(",")]
+    found_taskN = 0
+    tasks = {}
+    for line in lines[3:-1]:
+        t_info = re.match(r'\s*(\d+)\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*(True|False)\s*(True|False)\s*(\d|No)\s*(\d+)\s*(\d+)', line)
+        task_id = "T%02d"%int(t_info.group(1))
+        task_x, task_y = t_info.group(2), t_info.group(3)
+        task_found = t_info.group(4) == "True"
+        task_done = t_info.group(5)
+        task_assigned = t_info.group(6)
+        tasks[task_id] ={
+            "found": task_found,
+            "done": task_done,
+            "assigned": task_assigned
+        }
+
+        if task_found == True:
+          found_taskN += 1
+
+    task_info = {
+        "max": max_task,
+        "created": created_task,
+        "active": active_task,
+        "completed": completed_task,
+        "found": found_taskN,
+        "tasks": tasks
+    }
+
+    return task_info
+
 if __name__ == '__main__':
     os.system(f"./MRTA parse > {MRTA_LOG_PATH}")
 
     map_gif = MAP_GIF("./rd0_230.gif", 30, traces=['RD0', 'RD3'])
     with open(MRTA_LOG_PATH, "r") as f:
-        object_flag = False
+        map_flag = False
         map_lines = []
+        task_flag = False
+        task_lines = []
+        latest_task_info = {}
+
         tick = 0
-        for l in f.read().splitlines():
-            if l.startswith("Start Object map: "):
-                object_flag = True
+        for l in f.read().splitlines():        
+            if l.startswith("Start Task Info"):
+                task_flag = True
+            
+            elif l.startswith("End Task Info"):
+                latest_task_info = parse_task(task_lines)
+                task_flag = False
+                task_lines = []
+
+            elif task_flag:
+                task_lines.append(l)
+
+            elif l.startswith("Start Object map: "):
+                map_flag = True
                 tick = int(l[len("Start Object map: "):])
 
-            elif l == "End Object map":
-                object_flag = False
-                map_gif.add_object_map(parse_map(map_lines), tick)
+            elif l.startswith("End Object map"):
+                observed_cnt = int(l[len("End Object map: "):])
+                map_flag = False
+                map_gif.add_object_map(tick, parse_map(map_lines), observed_cnt, latest_task_info)
                 # map_gif.save()
                 # break
                 map_lines = []
 
-            elif object_flag:
+            elif map_flag:
                 if len(l) > 0 and not (l.startswith("0-") or l.startswith("  ")):
                     map_lines.append(l)
                 

@@ -197,23 +197,33 @@ void MAP::print_cost_map(ROBOT::TYPE type) const
     print_base(f);
 }
 
+
+int observed_cnt;
 void MAP::print_object_map_if_changed(int tick) {
     if(is_object_map_changed) {
+        observed_cnt = 0;
         cout << "Start Object map: " << tick << endl;
         print_object_map();
         is_object_map_changed = 0;
-        cout << "End Object map" << endl;
+        cout << "End Object map: " << observed_cnt << endl;
+        cout << "Start Task Info" << endl;
+        print_task_summary();
+        cout << "End Task Info" << endl;
     }
 }
 
-void MAP::print_object_map() const
+
+
+void MAP::print_object_map() const 
 {
     auto f = [this](int x, int y) -> void
     {
         auto obj = this->object_at(x, y);
 
-        if(this->observed_map_at(x,y))
+        if(this->observed_map_at(x,y)) {
             cout << "@";
+            observed_cnt += 1;
+        }
             
         if (obj == OBJECT::EMPTY) {
             cout << "   |";
@@ -247,9 +257,9 @@ void MAP::print_object_map() const
             {
                 if ((*it)->coord == Coord(x, y) && !(*it)->is_done())
                 {
-                    // if((int)this->known_object_at(x,y) & (int)OBJECT::TASK)
-                    //     cout << "!T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
-                    // else
+                    if((int)this->known_object_at(x,y) & (int)OBJECT::TASK)
+                        cout << "!T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
+                    else
                     cout << "T" << setfill('0') << setw(2) << (*it)->id << setw(0) << setfill(' ') << '|';
                     break;
                 }
