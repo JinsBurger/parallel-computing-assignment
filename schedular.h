@@ -2,7 +2,12 @@
 #define SCHEDULER_H_
 
 #include "simulator.h"
+#include <memory>
 
+void assign_tasks_mcmf(
+        const std::vector<std::vector<int>> &distRT,
+        const std::vector<std::vector<int>> &distTT,
+        std::vector<std::vector<int>>& robotPath);
 class Scheduler
 {
 public:

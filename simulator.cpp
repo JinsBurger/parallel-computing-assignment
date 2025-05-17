@@ -1,5 +1,11 @@
 #include "simulator.h"
 
+// 실체(정의) — 초기값은 이미 헤더에서 줬으므로 다시 쓰지 않습니다.
+constexpr int         ROBOT::view_range_list[];
+constexpr ROBOT::VIEWTYPE ROBOT::view_type_list[];
+constexpr int         ROBOT::energy_per_tick_list[];
+
+
 string bool_str(bool b) { return (b) ? "True" : "False"; }
 template <typename T>
 string bool_str(T b) { return bool_str(bool(b)); }
