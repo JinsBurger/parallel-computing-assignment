@@ -22,6 +22,8 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const vector<shared_ptr<TASK>> &active_tasks,
                                 const vector<shared_ptr<ROBOT>> &robots)
 {
+
+    //TODO: 전체 맵이 늘어났는 지 체크 후, MTMF 돌리는 코드추가.
     global_tick++;
     int map_size = static_cast<int>(known_object_map.size());
     for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
@@ -218,13 +220,19 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
 
 class DstarLite {
     public:
-    void update_map() {
+    void update_map_info(vector<vector<int>> map, vector<vector<int>> cost) {
+        this->map = map;
+        this->cost = cost;
+    }
 
+    pair<int, vector<pair<int, int>>> caculate_cost(int cx, int cy, int gx, int gy) {
+        //TODO: D *lite 최적 경로만 찾아서 리턴 해주기
     }
     
+    
     private:
-
-
+    vector<vector<int>> map;
+    vector<vector<int>> cost;
 };
 
 
