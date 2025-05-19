@@ -1,4 +1,5 @@
 #include "schedular.h"
+#include "simulator.h"
 #include <stack>
 #include <random>
 #include <map>
@@ -8,6 +9,57 @@
 
 
 using namespace std;
+
+
+/* 
+  ***************************************
+  ************* D STAR LITE *************
+  ***************************************
+*/
+
+//TODO: Create MapManager 
+
+
+class TaskDstarLite {
+    public:
+    TaskDstarLite(int x, int y) {
+        this->x = x;
+        this->y = y;
+    }
+
+    // known_cost_map sets uncertain coords to -1 and block to INT_MAX(std::numeric_limits<int>::max();)
+    void update_map_info(vector<vector<OBJECT>> object_map, vector<vector<vector<int>>> cost_map, set<Coord> updated_coords) {
+        if(TaskDstarLite::need_update) {
+            TaskDstarLite::object_map = object_map;
+            TaskDstarLite::cost_map = cost_map;
+            TaskDstarLite::need_update = false;
+            TaskDstarLite::updated_walls.clear();
+            for(auto coord : updated_coords) {
+                if(static_cast<int>(object_map[coord.x][coord.y]) & static_cast<int>(OBJECT::WALL)) {
+                    TaskDstarLite::updated_walls.push_back(coord);                    
+                }
+            }
+        }
+    }
+
+    void caculate_cost(int cx, int cy, int gx, int gy) {
+        //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
+    }
+
+    private:
+    int x, y;
+    static bool need_update;
+    static vector<vector<OBJECT>> object_map;
+    static vector<vector<vector<int>>> cost_map;
+    static vector<Coord> updated_walls;
+    
+};
+bool TaskDstarLite::need_update = false;
+vector<vector<OBJECT>> TaskDstarLite::object_map;
+vector<vector<vector<int>>> TaskDstarLite::cost_map;
+vector<Coord> TaskDstarLite::updated_walls;
+
+map<int, TaskDstarLite> tasks_dstar;
 
 // 매크로 선언 (필요 시 컴파일 시 -Dgravity_mode 추가)
 //#define gravity_mode
@@ -23,7 +75,14 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const vector<shared_ptr<ROBOT>> &robots)
 {
 
-    //TODO: 전체 맵이 늘어났는 지 체크 후, MTMF 돌리는 코드추가.
+    //TODO: Create MapManager to determine whether conducting MCMF(dstar) and control WALL effectively.
+    for(auto task : active_tasks) {
+        if(tasks_dstar.find(task->id) == tasks_dstar.end()) {
+            tasks_dstar.insert(make_pair(task->id, TaskDstarLite(task->coord.x, task->coord.y)));
+        }
+        tasks_dstar.at(task->id).update_map_info(known_object_map, known_cost_map, updated_coords);
+    }
+
     global_tick++;
     int map_size = static_cast<int>(known_object_map.size());
     for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
@@ -208,32 +267,6 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
 #endif
     }
 }
-
-
-
-
-/* 
-  ***************************************
-  ************* D STAR LITE *************
-  ***************************************
-*/
-
-class DstarLite {
-    public:
-    void update_map_info(vector<vector<int>> map, vector<vector<int>> cost) {
-        this->map = map;
-        this->cost = cost;
-    }
-
-    pair<int, vector<pair<int, int>>> caculate_cost(int cx, int cy, int gx, int gy) {
-        //TODO: D *lite 최적 경로만 찾아서 리턴 해주기
-    }
-    
-    
-    private:
-    vector<vector<int>> map;
-    vector<vector<int>> cost;
-};
 
 
 
