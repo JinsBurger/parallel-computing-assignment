@@ -6,11 +6,14 @@
 #include <queue>
 #include <limits>
 
+
+using namespace std;
+
 // 매크로 선언 (필요 시 컴파일 시 -Dgravity_mode 추가)
 //#define gravity_mode
 
 static int global_tick = 0;
-static std::map<int, std::vector<std::vector<int>>> last_seen_time;
+static map<int, vector<vector<int>>> last_seen_time;
 
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const set<Coord> &updated_coords,
@@ -23,7 +26,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
     int map_size = static_cast<int>(known_object_map.size());
     for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
         if (last_seen_time.count(id) == 0) {
-            last_seen_time[id] = std::vector<std::vector<int>>(map_size, std::vector<int>(map_size, -1));
+            last_seen_time[id] = vector<vector<int>>(map_size, vector<int>(map_size, -1));
         }
         for (const auto& coord : updated_coords) {
             if (coord.x >= 0 && coord.x < map_size && coord.y >= 0 && coord.y < map_size) {
@@ -56,10 +59,10 @@ static const Coord directions[4] = {
 // 반대 방향 인덱스
 static const int opposite[4] = {1, 0, 3, 2};
 
-static std::map<int, std::stack<Coord>> drone_stack;
-static std::map<int, std::vector<std::vector<bool>>> visited;
-static std::map<int, bool> initialized;
-static std::map<int, ROBOT::ACTION> initial_direction;
+static map<int, stack<Coord>> drone_stack;
+static map<int, vector<vector<bool>>> visited;
+static map<int, bool> initialized;
+static map<int, ROBOT::ACTION> initial_direction;
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const set<Coord> &updated_coords,
@@ -96,15 +99,15 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
 
     if (visited.count(id) == 0)
     {
-        visited[id] = std::vector<std::vector<bool>>(map_size, std::vector<bool>(map_size, false));
+        visited[id] = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
         drone_stack[id].push(curr);
         cout << "[Drone " << id << "] DFS initialized at " << curr << endl;
     }
 
     visited[id][curr.x][curr.y] = true;
 
-    std::vector<int> candidate_dir;
-    std::vector<int> unexplored_count(4, 0);
+    vector<int> candidate_dir;
+    vector<int> unexplored_count(4, 0);
 
     for (int dir = 0; dir < 4; ++dir)
     {
@@ -146,7 +149,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             if (unexplored_count[dir] > unexplored_count[best_dir])
                 best_dir = dir;
 
-        std::vector<int> best_candidates;
+        vector<int> best_candidates;
         for (int dir : candidate_dir)
             if (unexplored_count[dir] == unexplored_count[best_dir])
                 best_candidates.push_back(dir);
@@ -176,7 +179,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             }
         }
 #ifdef gravity_mode
-        std::array<int, 4> direction_weights = {0, 0, 0, 0};
+        array<int, 4> direction_weights = {0, 0, 0, 0};
         for (int x = 0; x < map_size; ++x) {
             for (int y = 0; y < map_size; ++y) {
                 if (known_object_map[x][y] == OBJECT::WALL) continue;
@@ -204,6 +207,36 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     }
 }
 
+
+
+
+/* 
+  ***************************************
+  ************* D STAR LITE *************
+  ***************************************
+*/
+
+class DstarLite {
+    public:
+    void update_map() {
+
+    }
+    
+    private:
+
+
+};
+
+
+
+
+
+
+/* 
+  ***************************************
+  ***************** MCMF ****************
+  ***************************************
+*/
 //--------------------------------------------
 // 1.  최소비용 최대유량 (MCMF)  ‑‑  간단한 SPFA‑based 구현
 //--------------------------------------------
@@ -215,7 +248,7 @@ struct Edge {
 
 class MCMF {
     int N;                                       // 정점 수
-    std::vector<std::vector<Edge>> G;            // 인접 리스트
+    vector<vector<Edge>> G;            // 인접 리스트
 public:
     explicit MCMF(int n) : N(n), G(n) {}
 
@@ -228,16 +261,16 @@ public:
     }
 
     // (flow, cost) 반환. 음수 cost 간선 허용.
-    std::pair<int,int> minCostMaxFlow(int s, int t) {
-        const int INF = std::numeric_limits<int>::max()/4;
+    pair<int,int> minCostMaxFlow(int s, int t) {
+        const int INF = numeric_limits<int>::max()/4;
         int flow = 0, cost = 0;
-        std::vector<int> dist(N), pvN(N), pvE(N);
+        vector<int> dist(N), pvN(N), pvE(N);
 
         while (true) {
-            std::fill(dist.begin(), dist.end(), INF);
+            fill(dist.begin(), dist.end(), INF);
             dist[s] = 0;
-            std::vector<bool> inQ(N, false);
-            std::queue<int> q; q.push(s); inQ[s] = true;
+            vector<bool> inQ(N, false);
+            queue<int> q; q.push(s); inQ[s] = true;
 
             // SPFA
             while (!q.empty()) {
@@ -257,7 +290,7 @@ public:
             // 증대량 찾기
             int aug = INF;
             for (int v = t; v != s; v = pvN[v])
-                aug = std::min(aug, G[pvN[v]][pvE[v]].cap);
+                aug = min(aug, G[pvN[v]][pvE[v]].cap);
 
             // 잔여 용량/비용 갱신
             flow += aug;
@@ -271,7 +304,7 @@ public:
         return {flow, cost};
     }
 
-    const std::vector<std::vector<Edge>>& graph() const { return G; }
+    const vector<vector<Edge>>& graph() const { return G; }
 };
 
 //--------------------------------------------
@@ -291,8 +324,8 @@ public:
  */
 
 //robotPath에 각 로봇이 순서대로 맡는 task(0~T-1)들을 계산하여 넣어주는 함수.
-void assign_tasks_mcmf(const std::vector<std::vector<int>>& distRT,
-                            const std::vector<std::vector<int>>& distTT, std::vector<std::vector<int>>& robotPath)
+void assign_tasks_mcmf(const vector<vector<int>>& distRT,
+                            const vector<vector<int>>& distTT, vector<vector<int>>& robotPath)
 {
     const int R = static_cast<int>(distRT.size());
     const int T = distRT.empty() ? 0 : (int)distRT[0].size();
@@ -350,7 +383,7 @@ void assign_tasks_mcmf(const std::vector<std::vector<int>>& distRT,
     int flow       = result.first;
     int totalCost  = result.second;
 
-    std::cout << "MCMF result : flow=" << flow << ", cost=" << totalCost << std::endl;
+    cout << "MCMF result : flow=" << flow << ", cost=" << totalCost << endl;
 
 
     /* ---------- 경로 추출 ---------- */
@@ -382,11 +415,11 @@ void assign_tasks_mcmf(const std::vector<std::vector<int>>& distRT,
     }
 
     /* ---------- 결과 확인용 출력 ---------- */
-    std::cout << "MCMF result : flow=" << flow
+    cout << "MCMF result : flow=" << flow
               << ", cost="   << totalCost << '\n';
     for (int r = 0; r < R; ++r) {
-        std::cout << "  Robot " << r << " :";
-        for (int t : robotPath[r]) std::cout << ' ' << t;
-        std::cout << '\n';
+        cout << "  Robot " << r << " :";
+        for (int t : robotPath[r]) cout << ' ' << t;
+        cout << '\n';
     }
 }
