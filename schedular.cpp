@@ -17,54 +17,73 @@ using namespace std;
   ***************************************
 */
 
-//TODO: Create MapManager 
+class MapManager {
+    public:
+        int tick;
+        MapManager(): tick(0) {}
 
+        int update_map_info(vector<vector<OBJECT>> object_map, vector<vector<vector<int>>> cost_map, set<Coord> observed_coords, set<Coord> updated_coords) {
+            this->object_map = object_map;
+            this->cost_map = cost_map;
+            this->latest_observed_coords.clear();
+
+            // Not initialized yet
+            if(observed_map.size() != this->object_map.size()) {
+                int wh = this->object_map.size();
+                this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -1));
+            }
+
+            for(auto coord : observed_coords) {
+                // If not observed
+                if(observed_map[coord.x][coord.y] < 0) {
+                    this->latest_observed_coords.push_back(coord);
+                }
+                this->observed_map[coord.x][coord.y] = tick;
+                return this->latest_observed_coords.size();
+            }
+        }
+
+    private:
+    vector<vector<int>> observed_map;
+    vector<Coord> latest_observed_coords;
+    vector<vector<OBJECT>> object_map;
+    vector<vector<vector<int>>> cost_map;
+};
+
+
+class DStar {
+
+};
 
 class TaskDstarLite {
     public:
-    TaskDstarLite(int x, int y) {
-        this->x = x;
-        this->y = y;
+    TaskDstarLite(int x, int y, MapManager &mm): task_x(x), task_y(y), mm(mm) {
+        this->dstars_map[ROBOT::TYPE::CATERPILLAR] = DStar();
+        this->dstars_map[ROBOT::TYPE::WHEEL] = DStar();
+        this->replanning();
+    }
+    
+    void replanning() {
     }
 
-    // known_cost_map sets uncertain coords to -1 and block to INT_MAX(std::numeric_limits<int>::max();)
-    void update_map_info(vector<vector<OBJECT>> object_map, vector<vector<vector<int>>> cost_map, set<Coord> updated_coords) {
-        if(TaskDstarLite::need_update) {
-            TaskDstarLite::object_map = object_map;
-            TaskDstarLite::cost_map = cost_map;
-            TaskDstarLite::need_update = false;
-            TaskDstarLite::updated_walls.clear();
-            for(auto coord : updated_coords) {
-                if(static_cast<int>(object_map[coord.x][coord.y]) & static_cast<int>(OBJECT::WALL)) {
-                    TaskDstarLite::updated_walls.push_back(coord);                    
-                }
-            }
-        }
-    }
-
-    void caculate_cost(int cx, int cy, int gx, int gy) {
+    void caculate_cost(ROBOT robot) {
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
     }
 
     private:
-    int x, y;
-    static bool need_update;
-    static vector<vector<OBJECT>> object_map;
-    static vector<vector<vector<int>>> cost_map;
-    static vector<Coord> updated_walls;
-    
+    map<ROBOT::TYPE, DStar> dstars_map;
+    int task_x, task_y;
+    int is_initialized;
+    MapManager &mm;
 };
-bool TaskDstarLite::need_update = false;
-vector<vector<OBJECT>> TaskDstarLite::object_map;
-vector<vector<vector<int>>> TaskDstarLite::cost_map;
-vector<Coord> TaskDstarLite::updated_walls;
-
 map<int, TaskDstarLite> tasks_dstar;
+
+
+MapManager map_manager;
 
 // 매크로 선언 (필요 시 컴파일 시 -Dgravity_mode 추가)
 //#define gravity_mode
 
-static int global_tick = 0;
 static map<int, vector<vector<int>>> last_seen_time;
 
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
@@ -75,15 +94,23 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const vector<shared_ptr<ROBOT>> &robots)
 {
 
-    //TODO: Create MapManager to determine whether conducting MCMF(dstar) and control WALL effectively.
+    map_manager.tick += 1;
+
+    //Replanning
+    int new_observed_coords = map_manager.update_map_info(known_object_map, known_cost_map, observed_coords, updated_coords);
+    int is_replanning_needed = new_observed_coords > 0;
+
     for(auto task : active_tasks) {
         if(tasks_dstar.find(task->id) == tasks_dstar.end()) {
-            tasks_dstar.insert(make_pair(task->id, TaskDstarLite(task->coord.x, task->coord.y)));
+            tasks_dstar.insert(make_pair(task->id, TaskDstarLite(task->coord.x, task->coord.y, map_manager)));
+        } else if(is_replanning_needed) {
+            //None of coords found newly, not need to conduct replanning.
+            tasks_dstar.at(task->id).replanning();
         }
-        tasks_dstar.at(task->id).update_map_info(known_object_map, known_cost_map, updated_coords);
     }
 
-    global_tick++;
+    //TODO: MCMF
+
     int map_size = static_cast<int>(known_object_map.size());
     for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
         if (last_seen_time.count(id) == 0) {
@@ -91,7 +118,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         }
         for (const auto& coord : updated_coords) {
             if (coord.x >= 0 && coord.x < map_size && coord.y >= 0 && coord.y < map_size) {
-                last_seen_time[id][coord.x][coord.y] = global_tick;
+                last_seen_time[id][coord.x][coord.y] = map_manager.tick;
             }
         }
     }
@@ -244,7 +271,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         for (int x = 0; x < map_size; ++x) {
             for (int y = 0; y < map_size; ++y) {
                 if (known_object_map[x][y] == OBJECT::WALL) continue;
-                int weight = (last_seen_time[id][x][y] == -1) ? global_tick : (global_tick - last_seen_time[id][x][y]);
+                int weight = (last_seen_time[id][x][y] == -1) ? map_manager.tick : (map_manager.tick - last_seen_time[id][x][y]);
                 if (y > x && y > -x + 2 * curr.x) direction_weights[0] += weight; // UP
                 else if (y < x && y < -x + 2 * curr.x) direction_weights[1] += weight; // DOWN
                 else if (y < x && y > -x + 2 * curr.x) direction_weights[2] += weight; // LEFT
