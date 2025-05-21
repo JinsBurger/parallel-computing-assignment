@@ -18,6 +18,7 @@ class MapManager {
         vector<vector<int>> observed_map;
         vector<Coord> latest_observed_coords;
         vector<vector<OBJECT>> object_map;
+        map<OBJECT, vector<Coord>> objects;
         vector<vector<vector<int>>> cost_map;
 
         MapManager(): tick(0) {}
@@ -39,11 +40,15 @@ class MapManager {
                     this->latest_observed_coords.push_back(coord);
                 }
                 this->observed_map[coord.x][coord.y] = tick;
-                return this->latest_observed_coords.size();
+                this->objects[object_map[coord.x][coord.y]].push_back(coord);
             }
+            
+            return this->latest_observed_coords.size();
         }
 
 };
+
+
 
 
 /* 
@@ -200,6 +205,16 @@ DStarMap::DStarMap(const int &height, const int &width) {
     map_size = std::make_pair(height, width);
 }
 
+
+/**
+ * @brief Add obstacles and change cells's status.
+ * @param obstacle a set of obstackes's position
+ * @param hidden_obstacle a set of hidden obstackes's position
+ * @return none
+ */
+void DStarMap::AddObstacle(pair<int, int> obstacle) {
+    grid.at(obstacle.first).at(obstacle.second).UpdateStatus(obstacle_mark);
+}
 
 /**
  * @brief Set the goal and change cells's status.
@@ -515,8 +530,8 @@ class DStarImpl {
         return next_position;
     }
 
-    void UpdateObstacle(const std::pair<int, int> obstacle_pos) {
-
+    void AddObstacle(std::pair<int, int> obstacle_pos) {
+        this->map.AddObstacle(obstacle_pos);
         this->map.UpdateCellStatus(obstacle_pos, this->map.obstacle_mark);
         // Update node's status
         UpdateVertex(obstacle_pos);
@@ -545,22 +560,41 @@ class DStarImpl {
 class TaskDstarLite {
     public:
     TaskDstarLite(int x, int y, MapManager &mm): task_x(x), task_y(y), mm(mm) {
-        this->dstars_map[ROBOT::TYPE::CATERPILLAR] = make_unique<DStarImpl>(mm.w, mm.h);
-        this->dstars_map[ROBOT::TYPE::WHEEL] = make_unique<DStarImpl>(mm.w, mm.h);
+        dstars_map[ROBOT::TYPE::CATERPILLAR] = make_unique<DStarImpl>(mm.w, mm.h);
+        dstars_map[ROBOT::TYPE::WHEEL] = make_unique<DStarImpl>(mm.w, mm.h);
 
-        this->dstars_map[ROBOT::TYPE::CATERPILLAR]->map.SetGoal(make_pair(task_x, task_y));
-        this->dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_x, task_y));
-        this->dstars_map[ROBOT::TYPE::CATERPILLAR]->Initialize();
-        this->dstars_map[ROBOT::TYPE::WHEEL]->Initialize();
-        this->replanning();
+        // Set the task position and initialie DStar
+        dstars_map[ROBOT::TYPE::CATERPILLAR]->map.SetGoal(make_pair(task_x, task_y));
+        dstars_map[ROBOT::TYPE::CATERPILLAR]->Initialize();
+        dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_x, task_y));
+        dstars_map[ROBOT::TYPE::WHEEL]->Initialize();
+
+        // Conduct path plannign
+        update_all_walls();
+        replanning();
+    }
+
+    void update_all_walls() {
+        for(Coord v : mm.objects[OBJECT::WALL]) {
+            //printf("wall: (%d, %d) \n", v.x, v.y);
+            dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(make_pair(v.x, v.y));
+            dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(make_pair(v.x, v.y));
+        }
+    }
+
+    void update_latest_walls() {
+        for(Coord v : mm.latest_observed_coords) {
+            if(mm.object_map[v.x][v.y] == OBJECT::WALL) {
+                dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(make_pair(v.x, v.y));
+                dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(make_pair(v.x, v.y));
+            }   
+        }
     }
     
     void replanning() {
-        for(Coord v : mm.latest_observed_coords) {
-            if(mm.object_map[v.x][v.y] == OBJECT::WALL) {
-                this->dstars_map[ROBOT::TYPE::WHEEL]->UpdateObstacle(make_pair(v.x, v.y));
-            }   
-        }
+        //Update Map(Wall) information
+        update_latest_walls();
+        dstars_map[ROBOT::TYPE::WHEEL]->map.PrintResult();
     }
 
     int calculate_cost(ROBOT robot, vector<Coord>& RtoT) {

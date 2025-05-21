@@ -61,8 +61,7 @@ class DStarMap {
 
     // constructor and environment initializing
     explicit DStarMap(const int &, const int &);
-    void AddObstacle(const std::vector<std::pair<int, int>> &,
-                     const std::vector<std::pair<int, int>> &);
+    void AddObstacle(std::pair<int, int>);
     void SetGoal(const std::pair<int, int> &);
 
     // get method
