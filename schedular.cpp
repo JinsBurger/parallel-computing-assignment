@@ -696,7 +696,7 @@ class TaskDstarLite {
     void replanning() {
     }
 
-    void caculate_cost(ROBOT robot) {
+    int calculate_cost(ROBOT robot, vector<Coord>& RtoT) {
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
     }
 
@@ -741,15 +741,22 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
 
     //TODO: MCMF
     vector<vector<int>> distRT, distTT, robotPath;
+    vector<vector<vector<Coord>>> RtoT;
     distRT.resize(robots.size());
     distTT.resize(active_tasks.size());
+    RtoT.resize(robots.size(),vector<vector<Coord>>(active_tasks.size()));
 
-    for(auto tid : tasks_dstar){
-        for(auto robot : robots){
-            task.second.calculate_cost(robot);
-            //TODO
+    int i=0, j=0;
+    for(auto& [task_id,task] : tasks_dstar){
+        for(const auto& robotPtr : robots){
+            distRT[i][j] = task.calculate_cost(*robotPtr, RtoT[i][j]);
+            j++;
         }
+        i++;
     }
+
+    assign_tasks_mcmf(distRT, distTT, robotPath);
+    
 
     int map_size = static_cast<int>(known_object_map.size());
     for (int id = 0; id < static_cast<int>(robots.size()); ++id) {

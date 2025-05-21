@@ -3,6 +3,7 @@
 
 #include "simulator.h"
 #include <memory>
+#include <vector>
 
 void assign_tasks_mcmf(
         const std::vector<std::vector<int>> &distRT,
