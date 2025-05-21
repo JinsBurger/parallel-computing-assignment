@@ -11,12 +11,6 @@
 using namespace std;
 
 
-/* 
-  ***************************************
-  ************* D STAR LITE *************
-  ***************************************
-*/
-
 class MapManager {
     public:
         int tick;
@@ -51,27 +45,663 @@ class MapManager {
 };
 
 
-class DStar {
+/* 
+  ***************************************
+  ************* D STAR LITE *************
+  ***************************************
+*/
 
+
+class DStarRobot {
+ public:
+    explicit DStarRobot(const std::pair<int, int> &);
+    std::pair<int, int> CurrentPosition() const;
+    void Move(const std::pair<int, int> &);
+ private:
+    std::pair<int, int> position;
 };
+
+
+
+class DStarCell{
+ public:
+    explicit DStarCell(const double &);
+    double CurrentG() const;
+    double CurrentRhs() const;
+    std::string CurrentStatus() const;
+    void UpdateG(const double &);
+    void UpdateRhs(const double &);
+    void UpdateStatus(const std::string &);
+
+ private:
+    double g = 0;
+    double rhs = 0;
+    std::string status = "";
+};
+
+class DStarOpenList {
+ public:
+    void Insert(const double &, const std::pair<int, int> &);
+    void UpdateKey(const double &, const std::pair<int, int> &);
+    void Remove(const std::pair<int, int> &);
+    std::pair<double, std::pair<int, int>> Top() const;
+    std::pair<double, std::pair<int, int>> Pop();
+    bool Find(const std::pair<int, int> &) const;
+ private:
+    std::vector<std::tuple<double, int, int>> priority_queue;
+};
+
+
+
+class DStarMap {
+ public:
+    // different costs
+    const double infinity_cost = 100.0;
+    const double diagonal_cost = 2.5;
+    const double transitional_cost = 1.0;
+
+    // different status marks
+    const std::string robot_mark = ".";
+    const std::string goal_mark = "g";
+    const std::string start_mark = "s";
+    const std::string obstacle_mark = "x";
+    const std::string unknown_mark = "?";
+
+    // constructor and environment initializing
+    explicit DStarMap(const int &, const int &);
+    void AddObstacle(const std::vector<std::pair<int, int>> &,
+                     const std::vector<std::pair<int, int>> &);
+    void SetGoal(const std::pair<int, int> &);
+
+    // get method
+    std::pair<int, int> GetGoal() const;
+    double CurrentCellG(const std::pair<int, int> &) const;
+    double CurrentCellRhs(const std::pair<int, int> &) const;
+    double CalculateCellKey(const std::pair<int, int> &) const;
+    std::string CurrentCellStatus(const std::pair<int, int> &) const;
+
+    // set method
+    void UpdateCellG(const std::pair<int, int> &, const double &);
+    void UpdateCellRhs(const std::pair<int, int> &, const double &);
+    void UpdateCellStatus(const std::pair<int, int> &, const std::string &);
+    void SetInfiityCellG(const std::pair<int, int> &);
+
+    double ComputeCost(const std::pair<int, int> &,
+                       const std::pair<int, int> &);
+
+    std::vector<std::pair<int, int>> FindNeighbors(const std::pair<int, int> &);
+    bool Availability(const std::pair<int, int> &);
+
+    // print method
+    void PrintValue();
+    void PrintResult();
+
+ private:
+    std::pair<int, int> map_size;
+    std::vector<std::vector<DStarCell>> grid;
+    std::pair<int, int> goal;
+};
+
+
+
+
+/**
+ * @brief Constructor
+ * @param start_point the start point of the robot
+ * @return none
+ */
+DStarRobot::DStarRobot(const std::pair<int, int> &start_point) { position = start_point; }
+
+/**
+ * @brief Get current position.
+ * @return the position of the robot
+ */
+std::pair<int, int> DStarRobot::CurrentPosition() const { return position; }
+
+/**
+ * @brief Move the robot.
+ * @param next_position next position
+ * @return none
+ */
+void DStarRobot::Move(const std::pair<int, int> &next_position) {
+    position = next_position;
+}
+
+
+
+
+
+
+/**
+ * @brief Constructor.
+ * @param initial_num a number for the inital g-value and rhs-value
+ * @return none
+ */
+DStarCell::DStarCell(const double &initial_num) {
+    g = initial_num;
+    rhs = initial_num;
+    status = " ";
+}
+
+/**
+ * @brief Get current g-value.
+ * @return g-value
+ */
+double DStarCell::CurrentG() const { return g; }
+
+/**
+ * @brief Get current rhs-value.
+ * @return rhs-value
+ */
+double DStarCell::CurrentRhs() const { return rhs; }
+
+/**
+ * @brief Get current status: obstacle, unknown obstacle, goal, or start point.
+ * @return mark that represent the status
+ */
+std::string DStarCell::CurrentStatus() const { return status; }
+
+/**
+ * @brief Set new g-value.
+ * @param new_g new estamated distance to the goal
+ * @return none
+ */
+void DStarCell::UpdateG(const double &new_g) { g = new_g; }
+
+/**
+ * @brief Set new rhs-value.
+ * @param new_rhs one step lookahead values based on the g-values
+ * @return none
+ */
+void DStarCell::UpdateRhs(const double &new_rhs) { rhs = new_rhs; }
+
+/**
+ * @brief Set new status.
+ * @param new_status a mark represent new status
+ * @return none
+ */
+void DStarCell::UpdateStatus(const std::string &new_status) { status = new_status; }
+
+/**
+ * @brief Inset a node in the open list.
+ * @param new_key thepriority of the node to be added
+ * @param new_node a candidate node's priority in searching and its position
+ * @return none
+ */
+void DStarOpenList::Insert(const double &new_key,
+                      const std::pair<int, int> &new_node) {
+    priority_queue.push_back(std::make_tuple(
+                             new_key, new_node.first, new_node.second));
+    std::push_heap(priority_queue.begin(),
+                   priority_queue.end(), std::greater<>());
+}
+
+/**
+ * @brief Update the key of node in the open list.
+ * @param new_key thepriority of the node to be changed
+ * @param position a candidate node's new priority in searching and its position
+ * @return none
+ */
+void DStarOpenList::UpdateKey(const double &new_key,
+                         const std::pair<int, int> &position) {
+    for (auto &node : priority_queue) {
+        if (std::get<1>(node) == position.first &&
+            std::get<2>(node) == position.second) {
+            std::get<0>(node) = new_key;
+            break;
+        }
+    }
+    std::make_heap(priority_queue.begin(),
+                   priority_queue.end(), std::greater<>());
+}
+
+/**
+ * @brief Remove a node from the open list.
+ * @param node a node's position
+ * @return none
+ */
+void DStarOpenList::Remove(const std::pair<int, int> &node) {
+    double min_key = -1.0;
+    UpdateKey(min_key, node);
+    std::pop_heap(priority_queue.begin(),
+                  priority_queue.end(), std::greater<>());
+    priority_queue.pop_back();
+}
+
+/**
+ * @brief Get the node on the top of the open list (a minimum heap).
+ * @return the top node's priority in searching and its position
+ */
+std::pair<double, std::pair<int, int>> DStarOpenList::Top() const {
+    auto key = std::get<0>(priority_queue.front());
+    auto position = std::make_pair(std::get<1>(priority_queue.front()),
+                                   std::get<2>(priority_queue.front()));
+    return std::make_pair(key, position);
+}
+
+/**
+ * @brief Get the node on the top of the open list and romovee it.
+ * @return the top node's priority in searching and its position
+ */
+std::pair<double, std::pair<int, int>> DStarOpenList::Pop() {
+    std::pop_heap(priority_queue.begin(),
+                  priority_queue.end(), std::greater<>());
+    auto top_node = priority_queue.back();
+    priority_queue.pop_back();
+    auto key = std::get<0>(top_node);
+    auto position = std::make_pair(std::get<1>(top_node),
+                                   std::get<2>(top_node));
+    return std::make_pair(key, position);
+}
+
+/**
+ * @brief Find if a node is in the open list.
+ * @return true if the node exsit and false if not
+ */
+bool DStarOpenList::Find(const std::pair<int, int> &node_to_find) const {
+    for (auto const &node : priority_queue) {
+        if (std::get<1>(node) == node_to_find.first &&
+            std::get<2>(node) == node_to_find.second)
+            return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Constructor.
+ * @param height the size of the map
+ * @param width the size of the map
+ * @return none
+ */
+DStarMap::DStarMap(const int &height, const int &width) {
+    std::vector<std::vector<DStarCell>> new_grid(
+        height,
+        std::vector<DStarCell>(width, DStarCell(infinity_cost)));
+    grid = new_grid;
+    map_size = std::make_pair(height, width);
+}
+
+/**
+ * @brief Add obstacles and change cells's status.
+ * @param obstacle a set of obstackes's position
+ * @param hidden_obstacle a set of hidden obstackes's position
+ * @return none
+ */
+void DStarMap::AddObstacle(const std::vector<std::pair<int, int>> &obstacle,
+                      const std::vector<std::pair<int, int>> &hidden_obstacle) {
+    for (auto const &node : obstacle)
+        grid.at(node.first).at(node.second).UpdateStatus(obstacle_mark);
+    for (auto const &node : hidden_obstacle)
+        grid.at(node.first).at(node.second).UpdateStatus(unknown_mark);
+}
+
+/**
+ * @brief Set the goal and change cells's status.
+ * @param new_goal the position of the goal
+ * @return none
+ */
+void DStarMap::SetGoal(const std::pair<int, int> &new_goal) {
+    goal = new_goal;
+    UpdateCellStatus(new_goal, goal_mark);
+}
+
+/**
+ * @brief Get the goal's position.
+ * @return the position of the goal
+ */
+std::pair<int, int> DStarMap::GetGoal() const { return goal; }
+
+/**
+ * @brief Get the g-value of the cell with given position.
+ * @param position the position of of the cell
+ * @return cell's g-value
+ */
+double DStarMap::CurrentCellG(const std::pair<int, int> &position) const {
+    return grid.at(position.first).at(position.second).CurrentG();
+}
+
+/**
+ * @brief Get the rhs-value of the cell with given position.
+ * @param position the position of of the cell
+ * @return cell's rhs-value
+ */
+double DStarMap::CurrentCellRhs(const std::pair<int, int> &position) const {
+    return grid.at(position.first).at(position.second).CurrentRhs();
+}
+
+/**
+ * @brief Caculat the key (priority in search) of the cell with given position.
+ * @param position the position of of the cell
+ * @return the key value, which is the priority in next search
+ */
+double DStarMap::CalculateCellKey(const std::pair<int, int> &position) const {
+    return std::min(CurrentCellG(position), CurrentCellRhs(position));
+}
+
+/**
+ * @brief Get the status of the cell with given position.
+ * @param position the position of of the cell
+ * @return cell's status
+ */
+std::string DStarMap::CurrentCellStatus(const std::pair<int, int> &position) const {
+    return grid.at(position.first).at(position.second).CurrentStatus();
+}
+
+/**
+ * @brief Set the g-value of the cell with given position.
+ * @param position the position of of the cell
+ * @param new_g new estamated distance to the goal
+ * @return none
+ */
+void DStarMap::UpdateCellG(const std::pair<int, int> &position,
+                      const double &new_g) {
+    grid.at(position.first).at(position.second).UpdateG(new_g);
+}
+
+/**
+ * @brief Set the rhs-value of the cell with given position.
+ * @param position the position of of the cell
+ * @param new_rhs one step lookahead values based on the g-values
+ * @return none
+ */
+void DStarMap::UpdateCellRhs(const std::pair<int, int> &position,
+                        const double &new_rhs) {
+    grid.at(position.first).at(position.second).UpdateRhs(new_rhs);
+}
+
+/**
+ * @brief Set the status of the cell with given position.
+ * @param position the position of of the cell
+ * @param new_status a mark that represent the new status of the cell
+ * @return none
+ */
+void DStarMap::UpdateCellStatus(const std::pair<int, int> &position,
+                           const std::string &new_status) {
+    grid.at(position.first).at(position.second).UpdateStatus(new_status);
+}
+
+/**
+ * @brief Set the g-value to infinity of the cell with given position.
+ * @param position the position of of the cell
+ * @return none
+ */
+void DStarMap::SetInfiityCellG(const std::pair<int, int> &position) {
+    UpdateCellG(position, infinity_cost);
+}
+
+/**
+ * @brief Compust the cost of from current node to next node.
+ * @param current_position current position of of the cell
+ * @param next_position next position of of the cell
+ * @return cost to travel
+ */
+double DStarMap::ComputeCost(const std::pair<int, int> &current_position,
+                        const std::pair<int, int> &next_position) {
+    if (!Availability(next_position)) return infinity_cost;
+    if (std::abs(current_position.first - next_position.first) +
+        std::abs(current_position.second - next_position.second) == 1)
+        return transitional_cost;
+    if (std::abs(current_position.first - next_position.first) +
+        std::abs(current_position.second - next_position.second) == 2)
+        return diagonal_cost;
+    else
+        return infinity_cost;
+}
+
+/**
+ * @brief Find eight neighbos that are reachable: not a obstacle nor outside.
+ * @param position current position of of the cell
+ * @return a set of eight neighbors that are reachable
+ */
+std::vector<std::pair<int, int>> DStarMap::FindNeighbors(
+    const std::pair<int, int> & position) {
+    std::vector<std::pair<int, int>> neighbors = {};
+    std::vector<int> search_neighbor = {-1, 0, 1};
+    for (auto const &i : search_neighbor) {
+        for (auto const &j : search_neighbor) {
+            auto neighbor = std::make_pair(position.first + i,
+                                           position.second + j);
+            auto cost = ComputeCost(position, neighbor);
+            if (cost == transitional_cost || cost == diagonal_cost)
+                neighbors.push_back(neighbor);
+        }
+    }
+    return neighbors;
+}
+
+/**
+ * @brief Check if the node is not a obstacle nor outside.
+ * @param position the position of next position
+ * @return true if accessible and flase if not 
+ */
+bool DStarMap::Availability(const std::pair<int, int> & position) {
+    if (position.first < 0 || position.first >= map_size.first) return false;
+    if (position.second < 0 || position.second >= map_size.second) return false;
+    return grid.at(position.first).at(position.second).CurrentStatus()
+           != obstacle_mark;
+}
+
+/**
+ *
+ * @brief Visualize all g-values and rhs-values in the map on the terminal.
+ *  
+ */
+void DStarMap::PrintValue() {
+    std::vector<std::string> lines(map_size.second, "-------------");
+    std::cout << "Value for shortest path:" << std::endl
+        << "(g, rhs): " << std::endl<< " -";
+    for (auto line : lines) std::cout << line;
+    std::cout << std::endl;
+    for (auto const &row : grid) {
+        std::cout << " | ";
+        for (auto const &cell : row) {
+            std::cout << "(" << std::setfill(' ') << std::setw(3)
+                      << cell.CurrentG() << ", "  << std::setfill(' ')
+                      << std::setw(3) << cell.CurrentRhs() << ") | ";
+        }
+        std::cout << std::endl << " -";
+        for (auto line : lines) std::cout << line;
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+/**
+ *
+ * @brief Visualize the map and the path the robot has traveled on the terminal.
+ *  
+ */
+void DStarMap::PrintResult() {
+    std::vector<std::string> lines(map_size.second, "----");
+    std::cout << "Result: " << std::endl
+        << "start: " << start_mark << " goal: " << goal_mark << " robot: "
+        << robot_mark << " obstacle: " << obstacle_mark << " unknown: "
+        << unknown_mark << std::endl;
+    std::cout << " -";
+    for (auto line : lines) std::cout << line;
+    std::cout << std::endl;
+    for (auto const &row : grid) {
+        std::cout << " | ";
+        for (auto const &cell : row) {
+            std::cout << cell.CurrentStatus() << " | ";
+        }
+        std::cout << std::endl << " -";
+        for (auto line : lines) std::cout << line;
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+
+
+void Initialize(DStarMap *, DStarOpenList *);
+void ComputeShortestPath(const DStarRobot &, DStarMap *, DStarOpenList *);
+void UpdateVertex(const std::pair<int, int> &, DStarMap *, DStarOpenList *);
+double ComputeMinRhs(const std::pair<int, int> &, DStarMap *);
+std::pair<int, int> ComputeNextPotision(const std::pair<int, int> &, DStarMap *);
+bool DetectHiddenObstacle(const std::pair<int, int> &, DStarMap *, DStarOpenList *);
+
+/**
+ * @brief Initialize the map and the open list
+ * @param map_ptr the pointer of the map
+ * @param DStaropenlist_ptr the pointer of the open list
+ * @return none
+ */
+void Initialize(DStarMap* map_ptr, DStarOpenList* openlist_ptr) {
+    // One lookahead cost of the goal must be zero
+    auto goal_rhs = 0.0;
+    map_ptr->UpdateCellRhs(map_ptr->GetGoal(), goal_rhs);
+    // Insert the goal to open list
+    auto new_key = map_ptr->CalculateCellKey(map_ptr->GetGoal());
+    openlist_ptr->Insert(new_key, map_ptr->GetGoal());
+}
+
+/**
+ * @brief Compute the shortest path
+ * @param robot the robot
+ * @param map_ptr the pointer of the map
+ * @param openlist_ptr the pointer of the open list
+ * @return none
+ */
+void ComputeShortestPath(const DStarRobot& robot,
+                         DStarMap* map_ptr, DStarOpenList* openlist_ptr) {
+    while (openlist_ptr->Top().first <
+           map_ptr->CalculateCellKey(robot.CurrentPosition()) ||
+           map_ptr->CurrentCellRhs(robot.CurrentPosition()) !=
+           map_ptr->CurrentCellG(robot.CurrentPosition())) {
+        auto key_and_node = openlist_ptr->Pop();
+        auto node = key_and_node.second;
+
+        auto old_key = key_and_node.first;
+        auto new_key = map_ptr->CalculateCellKey(node);
+
+        if (old_key < new_key) {
+            openlist_ptr->Insert(new_key, node);
+        } else if (map_ptr->CurrentCellG(node) >
+                   map_ptr->CurrentCellRhs(node)) {
+            map_ptr->UpdateCellG(node, map_ptr->CurrentCellRhs(node));
+            for (auto const &vertex : map_ptr->FindNeighbors(node)) {
+                UpdateVertex(vertex, map_ptr, openlist_ptr);
+            }
+        } else {
+            map_ptr->SetInfiityCellG(node);
+            UpdateVertex(node, map_ptr, openlist_ptr);
+            for (auto const &vertex : map_ptr->FindNeighbors(node)) {
+                UpdateVertex(vertex, map_ptr, openlist_ptr);
+            }
+        }
+    }
+    // Show the new computed shortest path.
+    map_ptr->PrintValue();
+    map_ptr->PrintResult();
+}
+
+/**
+ * @brief Update node of interest
+ * @param vertex the position of the node
+ * @param map_ptr the pointer of the map
+ * @param DStaropenlist_ptr the pointer of the open list
+ * @return none
+ */
+void UpdateVertex(const std::pair<int, int> &vertex,
+                  DStarMap *map_ptr, DStarOpenList *DStaropenlist_ptr) {
+    if (vertex != map_ptr->GetGoal()) {
+        map_ptr->UpdateCellRhs(vertex, ComputeMinRhs(vertex, map_ptr));
+    }
+    if (DStaropenlist_ptr->Find(vertex)) {
+        DStaropenlist_ptr->Remove(vertex);
+    }
+    if (map_ptr->CurrentCellG(vertex) != map_ptr->CurrentCellRhs(vertex)) {
+        DStaropenlist_ptr->Insert(map_ptr->CalculateCellKey(vertex), vertex);
+    }
+}
+
+/**
+ * @brief Find the numimum rhs of amoung node's neighbors.
+ * @param vertex the position of the node
+ * @param map_ptr the pointer of the map
+ * @return minimum rhs 
+ */
+double ComputeMinRhs(const std::pair<int, int> &vertex, DStarMap *map_ptr) {
+    double min_rhs = map_ptr->infinity_cost;
+    auto neibors = map_ptr->FindNeighbors(vertex);
+    for (auto const &next_vertex : neibors) {
+        auto temp_rhs = map_ptr->ComputeCost(vertex, next_vertex) +
+                        map_ptr->CurrentCellG(next_vertex);
+        if (temp_rhs < min_rhs) min_rhs = temp_rhs;
+    }
+    return min_rhs;
+}
+
+/**
+ * @brief Find next position with minimum g-value plus travel cost
+ * @param current_position the position of the current node
+ * @param map_ptr the pointer of the map
+ * @return next position in the shortest path
+ */
+std::pair<int, int> ComputeNextPotision(
+                    const std::pair<int, int> &current_position, DStarMap *map_ptr) {
+    auto next_position = current_position;
+    double cheaest_cost = map_ptr->infinity_cost;
+    for (auto const &candidate : map_ptr->FindNeighbors(current_position)) {
+        auto cost = map_ptr->ComputeCost(current_position, candidate) +
+                    map_ptr->CurrentCellG(candidate);
+        if (cost < cheaest_cost) {
+            cheaest_cost = cost;
+            next_position = candidate;
+        }
+    }
+    return next_position;
+}
+
+/**
+ * @brief Find hidden obstacle and recognize it a obstacle
+ * @param current_position robot's current position
+ * @param map_ptr the pointer of the map
+ * @param DStaropenlist_ptr the pointer of the open list
+ * @return if there are hidden obstacle around
+ */
+bool DetectHiddenObstacle(const std::pair<int, int> &current_position,
+                          DStarMap *map_ptr, DStarOpenList *DStaropenlist_ptr) {
+                            
+    auto is_changed = false;
+    for (auto const &candidate : map_ptr->FindNeighbors(current_position)) {
+        if (map_ptr->CurrentCellStatus(candidate) == map_ptr->unknown_mark) {
+            map_ptr->UpdateCellStatus(candidate, map_ptr->obstacle_mark);
+
+            is_changed = true;
+            // Update node's status
+            UpdateVertex(candidate, map_ptr, DStaropenlist_ptr);
+
+            for (auto const &candidate_neighbor :
+                             map_ptr->FindNeighbors(candidate)) {
+                UpdateVertex(candidate_neighbor, map_ptr, DStaropenlist_ptr);
+            }
+            map_ptr->UpdateCellRhs(candidate, map_ptr->infinity_cost);
+            map_ptr->UpdateCellG(candidate, map_ptr->infinity_cost);
+        }
+    }
+    return is_changed;
+}
+
 
 class TaskDstarLite {
     public:
     TaskDstarLite(int x, int y, MapManager &mm): task_x(x), task_y(y), mm(mm) {
-        this->dstars_map[ROBOT::TYPE::CATERPILLAR] = DStar();
-        this->dstars_map[ROBOT::TYPE::WHEEL] = DStar();
+        this->dstars_map[ROBOT::TYPE::CATERPILLAR] = DStarMap(mm.w, mm.h);
+        this->dstars_map[ROBOT::TYPE::WHEEL] = DStarMap(mm.w, mm.h);
         this->replanning();
     }
     
     void replanning() {
     }
 
-    pair<int, vector<Coord>> calculate_cost_path(ROBOT robot) {
+    void caculate_cost(ROBOT robot) {
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
     }
 
     private:
-    map<ROBOT::TYPE, DStar> dstars_map;
+    map<ROBOT::TYPE, DStarMap> dstars_map;
     int task_x, task_y;
     int is_initialized;
     MapManager &mm;
@@ -114,7 +744,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
     distRT.resize(robots.size());
     distTT.resize(active_tasks.size());
 
-    for(auto task : tasks_dstar){
+    for(auto tid : tasks_dstar){
         for(auto robot : robots){
             task.second.calculate_cost(robot);
             //TODO
