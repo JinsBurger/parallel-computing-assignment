@@ -14,6 +14,7 @@ using namespace std;
 class MapManager {
     public:
         int tick;
+        int w, h;
         MapManager(): tick(0) {}
 
         int update_map_info(vector<vector<OBJECT>> object_map, vector<vector<vector<int>>> cost_map, set<Coord> observed_coords, set<Coord> updated_coords) {
@@ -23,7 +24,7 @@ class MapManager {
 
             // Not initialized yet
             if(observed_map.size() != this->object_map.size()) {
-                int wh = this->object_map.size();
+                int wh = this->w = this->h = this->object_map.size();
                 this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -1));
             }
 
@@ -688,8 +689,8 @@ bool DetectHiddenObstacle(const std::pair<int, int> &current_position,
 class TaskDstarLite {
     public:
     TaskDstarLite(int x, int y, MapManager &mm): task_x(x), task_y(y), mm(mm) {
-        this->dstars_map[ROBOT::TYPE::CATERPILLAR] = DStarMap(mm.w, mm.h);
-        this->dstars_map[ROBOT::TYPE::WHEEL] = DStarMap(mm.w, mm.h);
+        this->dstars_map[ROBOT::TYPE::CATERPILLAR] = make_unique<DStarMap>(mm.w, mm.h);
+        this->dstars_map[ROBOT::TYPE::WHEEL] = make_unique<DStarMap>(mm.w, mm.h);
         this->replanning();
     }
     
@@ -701,7 +702,7 @@ class TaskDstarLite {
     }
 
     private:
-    map<ROBOT::TYPE, DStarMap> dstars_map;
+    map<ROBOT::TYPE, unique_ptr<DStarMap>> dstars_map;
     int task_x, task_y;
     int is_initialized;
     MapManager &mm;
@@ -742,9 +743,9 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
     //TODO: MCMF
     vector<vector<int>> distRT, distTT, robotPath;
     vector<vector<vector<Coord>>> RtoT;
-    distRT.resize(robots.size());
-    distTT.resize(active_tasks.size());
-    RtoT.resize(robots.size(),vector<vector<Coord>>(active_tasks.size()));
+    distRT = vector<vector<int>>(robots.size(), vector<int>(robots.size()));
+    distTT = vector<vector<int>>(active_tasks.size(), vector<int>(active_tasks.size()));
+    RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(active_tasks.size()));
 
     int i=0, j=0;
     for(auto& [task_id,task] : tasks_dstar){
@@ -756,7 +757,6 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
     }
 
     assign_tasks_mcmf(distRT, distTT, robotPath);
-    
 
     int map_size = static_cast<int>(known_object_map.size());
     for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
@@ -1075,7 +1075,7 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
         int fromBeg = TASK_BEG + k * T;
         int toBeg   = TASK_BEG + (k + 1) * T;
 
-        for (int i = 0; i < T; ++i)
+        for (int i = 0; i < T; ++i) //TODO: Mismatch the size of distTT
             for (int j = 0; j < T; ++j)
                 mcmf.addEdge(fromBeg + i,
                              toBeg   + j,
@@ -1105,7 +1105,7 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
 
     const auto& G = mcmf.graph();
     robotPath.clear();
-    robotPath.resize(R);
+    robotPath = vector<vector<int>>(R, vector<int>(R));
 
     for (int r = 0; r < R; ++r) {
         int node = ROBOT_BEG + r;                 // 로봇 노드부터 시작
@@ -1113,7 +1113,7 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
             bool advanced = false;
             for (const Edge& e : G[node]) {
                 // forward 간선으로 실제 flow가 흘렀다면 역간선 cap > 0
-                if (G[e.to][e.rev].cap > 0) {
+                    if (G[e.to][e.rev].cap > 0) {
                     // 다음 노드가 task-layer 라인인가?
                     if (e.to >= TASK_BEG && e.to < TASK_BEG + T * T) {
                         int taskIdx = (e.to - TASK_BEG) % T;     // 0 ~ T-1
