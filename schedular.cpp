@@ -9,7 +9,7 @@
 
 
 using namespace std;
-
+//#define gravity_mode
 
 class MapManager {
     public:
@@ -722,17 +722,20 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             int cnt = 0;
             for (int i = -2; i <= 2; ++i)
             {
-                Coord check;
-                if (dir == 0 || dir == 1)
-                    check = {curr.x + i, curr.y + (dir == 0 ? 3 : -3)};
-                else
-                    check = {curr.x + (dir == 2 ? -3 : 3), curr.y + i};
+                for (int j = 3; j <= 4; ++j) // 기존 1~2 → 3~4로 수정
+                {
+                    Coord check;
+                    if (dir == 0)       check = {curr.x + i, curr.y + j}; // UP
+                    else if (dir == 1)  check = {curr.x + i, curr.y - j}; // DOWN
+                    else if (dir == 2)  check = {curr.x - j, curr.y + i}; // LEFT
+                    else                check = {curr.x + j, curr.y + i}; // RIGHT
 
-                if (check.x < 0 || check.x >= map_size || check.y < 0 || check.y >= map_size)
-                    continue;
+                    if (check.x < 0 || check.x >= map_size || check.y < 0 || check.y >= map_size)
+                        continue;
 
-                if (known_object_map[check.x][check.y] == OBJECT::UNKNOWN)
-                    cnt++;
+                    if (known_object_map[check.x][check.y] == OBJECT::UNKNOWN)
+                        cnt++;
+                }
             }
 
             if (cnt > 0)
@@ -781,10 +784,11 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         }
 #ifdef gravity_mode
         array<int, 4> direction_weights = {0, 0, 0, 0};
+        int current_tick = map_manager.tick; // tick 사용
         for (int x = 0; x < map_size; ++x) {
             for (int y = 0; y < map_size; ++y) {
                 if (known_object_map[x][y] == OBJECT::WALL) continue;
-                int weight = (last_seen_time[id][x][y] == -1) ? map_manager.tick : (map_manager.tick - last_seen_time[id][x][y]);
+                int weight = (last_seen_time[id][x][y] == -1) ? current_tick : (current_tick - last_seen_time[id][x][y]);
                 if (y > x && y > -x + 2 * curr.x) direction_weights[0] += weight; // UP
                 else if (y < x && y < -x + 2 * curr.x) direction_weights[1] += weight; // DOWN
                 else if (y < x && y > -x + 2 * curr.x) direction_weights[2] += weight; // LEFT
@@ -800,10 +804,44 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         cout << "[Drone " << id << "] DFS complete, gravity mode → directional weight max at " << max_dir << " → move " << max_dir << endl;
         return static_cast<ROBOT::ACTION>(max_dir);
 #else
-        int rand_dir = rand() % 4;
-        Coord next = curr + directions[rand_dir];
-        cout << "[Drone " << id << "] DFS complete, fallback random move → dir " << rand_dir << endl;
-        return static_cast<ROBOT::ACTION>(rand_dir);
+        // 중력 모드가 아닐 때: 무작위 이동이 아니라, 맵의 중앙으로 향하는 방향 선택
+        int mid_x = map_size / 2;
+        int mid_y = map_size / 2;
+        int dx = mid_x - curr.x;
+        int dy = mid_y - curr.y;
+
+        vector<ROBOT::ACTION> dir_priority;
+        if (abs(dx) > abs(dy)) {
+            if (dx > 0) dir_priority.push_back(ROBOT::ACTION::RIGHT);
+            else if (dx < 0) dir_priority.push_back(ROBOT::ACTION::LEFT);
+            if (dy > 0) dir_priority.push_back(ROBOT::ACTION::UP);
+            else if (dy < 0) dir_priority.push_back(ROBOT::ACTION::DOWN);
+        } else {
+            if (dy > 0) dir_priority.push_back(ROBOT::ACTION::UP);
+            else if (dy < 0) dir_priority.push_back(ROBOT::ACTION::DOWN);
+            if (dx > 0) dir_priority.push_back(ROBOT::ACTION::RIGHT);
+            else if (dx < 0) dir_priority.push_back(ROBOT::ACTION::LEFT);
+        }
+
+        // 모든 방향을 넣어서 fallback 시에도 반드시 이동하도록
+        for (int i = 0; i < 4; ++i)
+        {
+            if (find(dir_priority.begin(), dir_priority.end(), static_cast<ROBOT::ACTION>(i)) == dir_priority.end())
+                dir_priority.push_back(static_cast<ROBOT::ACTION>(i));
+        }
+
+        for (ROBOT::ACTION dir : dir_priority) {
+            Coord next = curr + directions[static_cast<int>(dir)];
+            if (next.x < 0 || next.x >= map_size || next.y < 0 || next.y >= map_size)
+                continue;
+            if (known_object_map[next.x][next.y] == OBJECT::WALL)
+                continue;
+            cout << "[Drone " << id << "] DFS complete, center-seeking or fallback → dir " << static_cast<int>(dir) << endl;
+            return dir;
+        }
+
+        cout << "[Drone " << id << "] DFS complete, all directions blocked → HOLD" << endl;
+        return ROBOT::ACTION::HOLD;
 #endif
     }
 }

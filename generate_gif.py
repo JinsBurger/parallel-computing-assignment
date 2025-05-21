@@ -133,18 +133,31 @@ class MAP_GIF:
               if self.trace_map[j][i] != 0:
                 ax.add_patch(plt.Rectangle((j - 0.4, i - 0.4), 0.8, 0.8, color=self.traces[self.trace_map[j][i]], zorder=self.zorder["TRACE"]))
 
-              #Observed task
+              # Observed task
               if obj != '':
                 if obj[0] == '@':
-                  '''
-                  The object names of found tasks start with `!`, e.g !T05
-                  If not, these tasks have been created later, but not observed yet.
-                  '''
-                  if len(obj_name) > 0 and obj_name[0] == 'T' and obj_name[1:].isnumeric():
-                      ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='blue', alpha=0.3, zorder=self.zorder["OBSERVED"]))
-                  else:
-                    ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', alpha=0.3, zorder=self.zorder["OBSERVED"]))
+                    '''
+                    Found task names start with `@!Txx`  (e.g., @!T05)
+                    Unfound task names start with `@Txx` (e.g., @T05)
+                    '''
+                    if len(obj_name) > 0 and obj_name.startswith('!T') and obj_name[2:].isnumeric():
+                        # 발견된 Task → 주황색
+                        ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='orange', alpha=0.4, zorder=self.zorder["OBSERVED"]))
+                    elif len(obj_name) > 0 and obj_name.startswith('T') and obj_name[1:].isnumeric():
+                        task_id = obj_name
+                        if task_id in task_info["tasks"]:
+                            if not task_info["tasks"][task_id]["found"]:
+                                # 초기 생성 Task지만 아직 발견되지 않은 경우 → 연두색
+                                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='greenyellow', alpha=0.3, zorder=self.zorder["OBSERVED"]))
+                        else:
+                            # task_info에 등록되지 않은 → 최근 생성된 Task (아직 발견되지 않음) → 파란색
+                            ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='blue', alpha=0.3, zorder=self.zorder["OBSERVED"]))
+                    else:
+                        # 기타 객체 → 빨간색
+                        ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', alpha=0.3, zorder=self.zorder["OBSERVED"]))
                 ax.text(j, i, obj_name, ha='center', va='center', fontsize=3, family='monospace', zorder=self.zorder["TEXT"])
+
+
             
             
         
