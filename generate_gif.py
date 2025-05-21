@@ -183,7 +183,7 @@ class MAP_GIF:
 
 def parse_map(lines):
     map = []
-    for l in lines:
+    for l in lines[::-1]:
         row = []
         for e in l.split("|")[1:-1]:
             row.append(e.strip())
