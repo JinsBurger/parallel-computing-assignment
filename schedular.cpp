@@ -55,7 +55,7 @@ class MapManager {
   ***************************************
   ************* D STAR LITE *************
   ***************************************
-  Reference to https://github.com/ykwang11/ENPM808X_Midterm-Project_D-Star-Lite-Path-Planning/blob/master/app/main.cpp
+  Improved version from https://github.com/ykwang11/ENPM808X_Midterm-Project_D-Star-Lite-Path-Planning/blob/master/app/main.cpp
 */
 
 
