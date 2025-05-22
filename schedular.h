@@ -15,6 +15,30 @@
   Reference to https://github.com/ykwang11/ENPM808X_Midterm-Project_D-Star-Lite-Path-Planning/blob/master/app/main.cpp
 */
 
+
+struct Key {
+    public:
+    double key1;
+    double key2;
+
+    Key(double key1, double key2) : key1(key1), key2(key2) {};
+    bool operator<(Key const & rhs) const {
+        return (this->key1 < rhs.key1) || (this->key2 < rhs.key2);
+    }
+\
+};
+
+class DStarRobot {
+ public:
+    explicit DStarRobot(const std::pair<int, int> &);
+    std::pair<int, int> CurrentPosition() const;
+    void Move(const std::pair<int, int> &);
+ private:
+    std::pair<int, int> position;
+};
+
+
+
 class DStarCell{
  public:
     explicit DStarCell(const double &);
@@ -33,14 +57,14 @@ class DStarCell{
 
 class DStarOpenList {
  public:
-    void Insert(const double &, const std::pair<int, int> &);
-    void UpdateKey(const double &, const std::pair<int, int> &);
+    void Insert(Key, const std::pair<int, int> &);
+    void UpdateKey(Key, const std::pair<int, int> &);
     void Remove(const std::pair<int, int> &);
-    std::pair<double, std::pair<int, int>> Top() const;
-    std::pair<double, std::pair<int, int>> Pop();
+    std::pair<Key, std::pair<int, int>> Top() const;
+    std::pair<Key, std::pair<int, int>> Pop();
     bool Find(const std::pair<int, int> &) const;
  private:
-    std::vector<std::tuple<double, int, int>> priority_queue;
+    std::vector<std::tuple<Key, int, int>> priority_queue;
 };
 
 
@@ -61,14 +85,16 @@ class DStarMap {
 
     // constructor and environment initializing
     explicit DStarMap(const int &, const int &);
-    void AddObstacle(std::pair<int, int>);
+    void AddObstacle(pair<int, int> );
+    void SetStart(const std::pair<int, int> &);
     void SetGoal(const std::pair<int, int> &);
 
     // get method
     std::pair<int, int> GetGoal() const;
     double CurrentCellG(const std::pair<int, int> &) const;
+    int Heuristic(const std::pair<int, int> &, const std::pair<int, int> &) const;
     double CurrentCellRhs(const std::pair<int, int> &) const;
-    double CalculateCellKey(const std::pair<int, int> &) const;
+    Key CalculateCellKey(const std::pair<int, int> &) const;
     std::string CurrentCellStatus(const std::pair<int, int> &) const;
 
     // set method
@@ -88,9 +114,11 @@ class DStarMap {
     void PrintResult();
 
  private:
+    std::pair<int, int> start;
+    std::pair<int, int> goal;
+    double km;
     std::pair<int, int> map_size;
     std::vector<std::vector<DStarCell>> grid;
-    std::pair<int, int> goal;
 };
 
 
