@@ -58,6 +58,13 @@ class MapManager {
   Reference to https://github.com/ykwang11/ENPM808X_Midterm-Project_D-Star-Lite-Path-Planning/blob/master/app/main.cpp
 */
 
+
+
+/**
+ * @brief Constructor.
+ * @param initial_num a number for the inital g-value and rhs-value
+ * @return none
+ */
 DStarCell::DStarCell(const double &initial_num) {
     g = initial_num;
     rhs = initial_num;
@@ -103,16 +110,13 @@ void DStarCell::UpdateRhs(const double &new_rhs) { rhs = new_rhs; }
  */
 void DStarCell::UpdateStatus(const std::string &new_status) { status = new_status; }
 
-
-
-
 /**
  * @brief Inset a node in the open list.
  * @param new_key thepriority of the node to be added
  * @param new_node a candidate node's priority in searching and its position
  * @return none
  */
-void DStarOpenList::Insert(const double &new_key,
+void DStarOpenList::Insert(Key new_key,
                       const std::pair<int, int> &new_node) {
     priority_queue.push_back(std::make_tuple(
                              new_key, new_node.first, new_node.second));
@@ -126,7 +130,7 @@ void DStarOpenList::Insert(const double &new_key,
  * @param position a candidate node's new priority in searching and its position
  * @return none
  */
-void DStarOpenList::UpdateKey(const double &new_key,
+void DStarOpenList::UpdateKey(Key new_key,
                          const std::pair<int, int> &position) {
     for (auto &node : priority_queue) {
         if (std::get<1>(node) == position.first &&
@@ -145,8 +149,7 @@ void DStarOpenList::UpdateKey(const double &new_key,
  * @return none
  */
 void DStarOpenList::Remove(const std::pair<int, int> &node) {
-    double min_key = -1.0;
-    UpdateKey(min_key, node);
+    UpdateKey(Key(-1, -1), node);
     std::pop_heap(priority_queue.begin(),
                   priority_queue.end(), std::greater<>());
     priority_queue.pop_back();
@@ -156,7 +159,7 @@ void DStarOpenList::Remove(const std::pair<int, int> &node) {
  * @brief Get the node on the top of the open list (a minimum heap).
  * @return the top node's priority in searching and its position
  */
-std::pair<double, std::pair<int, int>> DStarOpenList::Top() const {
+std::pair<Key, std::pair<int, int>> DStarOpenList::Top() const {
     auto key = std::get<0>(priority_queue.front());
     auto position = std::make_pair(std::get<1>(priority_queue.front()),
                                    std::get<2>(priority_queue.front()));
@@ -167,7 +170,7 @@ std::pair<double, std::pair<int, int>> DStarOpenList::Top() const {
  * @brief Get the node on the top of the open list and romovee it.
  * @return the top node's priority in searching and its position
  */
-std::pair<double, std::pair<int, int>> DStarOpenList::Pop() {
+std::pair<Key, std::pair<int, int>> DStarOpenList::Pop() {
     std::pop_heap(priority_queue.begin(),
                   priority_queue.end(), std::greater<>());
     auto top_node = priority_queue.back();
@@ -205,7 +208,6 @@ DStarMap::DStarMap(const int &height, const int &width) {
     map_size = std::make_pair(height, width);
 }
 
-
 /**
  * @brief Add obstacles and change cells's status.
  * @param obstacle a set of obstackes's position
@@ -214,6 +216,12 @@ DStarMap::DStarMap(const int &height, const int &width) {
  */
 void DStarMap::AddObstacle(pair<int, int> obstacle) {
     grid.at(obstacle.first).at(obstacle.second).UpdateStatus(obstacle_mark);
+}
+
+
+void DStarMap::SetStart(const std::pair<int, int> &new_start) {
+    start = new_start;
+    km += Heuristic(new_start, goal);
 }
 
 /**
@@ -225,6 +233,8 @@ void DStarMap::SetGoal(const std::pair<int, int> &new_goal) {
     goal = new_goal;
     UpdateCellStatus(new_goal, goal_mark);
 }
+
+
 
 /**
  * @brief Get the goal's position.
@@ -255,8 +265,17 @@ double DStarMap::CurrentCellRhs(const std::pair<int, int> &position) const {
  * @param position the position of of the cell
  * @return the key value, which is the priority in next search
  */
-double DStarMap::CalculateCellKey(const std::pair<int, int> &position) const {
-    return std::min(CurrentCellG(position), CurrentCellRhs(position));
+
+
+int DStarMap::Heuristic(const std::pair<int, int> & s1, const std::pair<int, int> & s2) const {
+     return sqrt(pow((s1.first-s2.first),2) + pow((s1.second-s2.second),2));
+}
+
+Key DStarMap::CalculateCellKey(const std::pair<int, int> &position) const {
+    double h = Heuristic(this->start, this->goal);
+    double key2 = std::min(CurrentCellG(position), CurrentCellRhs(position));
+    printf("key: {%.2f, %.2f} \n", key2+h+km, key2);
+    return Key(key2+h+km, key2);
 }
 
 /**
@@ -319,6 +338,8 @@ void DStarMap::SetInfiityCellG(const std::pair<int, int> &position) {
 double DStarMap::ComputeCost(const std::pair<int, int> &current_position,
                         const std::pair<int, int> &next_position) {
     if (!Availability(next_position)) return infinity_cost;
+    // if(next_position.first == 1 && next_position.second == 4)
+    //     return 0.3;
     if (std::abs(current_position.first - next_position.first) +
         std::abs(current_position.second - next_position.second) == 1)
         return transitional_cost;
@@ -337,15 +358,16 @@ double DStarMap::ComputeCost(const std::pair<int, int> &current_position,
 std::vector<std::pair<int, int>> DStarMap::FindNeighbors(
     const std::pair<int, int> & position) {
     std::vector<std::pair<int, int>> neighbors = {};
-    std::vector<int> search_neighbor = {-1, 0, 1};
+    std::vector<std::pair<int, int>> search_neighbor = {
+        {1,0}, {-1,0}, {0,1},{0,-1}
+    };
+
     for (auto const &i : search_neighbor) {
-        for (auto const &j : search_neighbor) {
-            auto neighbor = std::make_pair(position.first + i,
-                                           position.second + j);
-            auto cost = ComputeCost(position, neighbor);
-            if (cost == transitional_cost || cost == diagonal_cost)
-                neighbors.push_back(neighbor);
-        }
+        auto neighbor = std::make_pair(position.first + i.first,
+                                        position.second + i.second);
+        auto cost = ComputeCost(position, neighbor);
+        if (cost < 100.0) // TODO
+            neighbors.push_back(neighbor);
     }
     return neighbors;
 }
@@ -412,6 +434,7 @@ void DStarMap::PrintResult() {
     }
     std::cout << std::endl;
 }
+
 
 class DStarImpl {
     public:
