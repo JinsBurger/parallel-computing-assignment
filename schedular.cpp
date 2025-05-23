@@ -11,42 +11,47 @@
 using namespace std;
 //#define gravity_mode
 
-class MapManager {
-    public:
-        int tick;
-        int w, h;
-        vector<vector<int>> observed_map;
-        vector<Coord> latest_observed_coords;
-        vector<vector<OBJECT>> object_map;
-        map<OBJECT, vector<Coord>> objects;
-        vector<vector<vector<int>>> cost_map;
 
-        MapManager(): tick(0) {}
+MapManager::MapManager(): tick(0) {}
 
-        int update_map_info(vector<vector<OBJECT>> object_map, vector<vector<vector<int>>> cost_map, set<Coord> observed_coords, set<Coord> updated_coords) {
-            this->object_map = object_map;
-            this->cost_map = cost_map;
-            this->latest_observed_coords.clear();
 
-            // Not initialized yet
-            if(observed_map.size() != this->object_map.size()) {
-                int wh = this->w = this->h = this->object_map.size();
-                this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -1));
+int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector<vector<int>>> cost_map, set<Coord> observed_coords, set<Coord> updated_coords) {
+    this->object_map = object_map;
+    this->cost_map = cost_map;
+    this->latest_observed_coords.clear();
+
+    // Not initialized yet
+    if(observed_map.size() != this->object_map.size()) {
+        int wh = this->w = this->h = this->object_map.size();
+        this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -1));
+    }
+
+    for(auto coord : observed_coords) {
+        // If not observed
+        if(observed_map[coord.x][coord.y] < 0) {
+            this->latest_observed_coords.push_back(coord);
+            if(object_map[coord.x][coord.y] != OBJECT::WALL) {
+                avg_costs[ROBOT::TYPE::WHEEL] += cost_map[coord.x][coord.y][static_cast<int>(ROBOT::TYPE::WHEEL)];
+                avg_costs[ROBOT::TYPE::CATERPILLAR] += cost_map[coord.x][coord.y][static_cast<int>(ROBOT::TYPE::CATERPILLAR)];
+                certain_coordN += 1;
             }
-
-            for(auto coord : observed_coords) {
-                // If not observed
-                if(observed_map[coord.x][coord.y] < 0) {
-                    this->latest_observed_coords.push_back(coord);
-                }
-                this->observed_map[coord.x][coord.y] = tick;
-                this->objects[object_map[coord.x][coord.y]].push_back(coord);
-            }
-            
-            return this->latest_observed_coords.size();
         }
+        this->observed_map[coord.x][coord.y] = tick;
+        this->objects[object_map[coord.x][coord.y]].push_back(coord);   
+    }
+    return this->latest_observed_coords.size();
+}
 
-};
+// known_cost_map sets uncertain coords to -1 and block to INT_MAX(std::numeric_limits<int>::max();)
+// TODO: Cost Type
+double MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
+    int cost = this->cost_map[pos.x][pos.y][static_cast<int>(type)];
+    //uncertain coords
+    if(cost < 0) {
+        cost = avg_costs[type] / certain_coordN;
+    }
+    return cost;
+}
 
 
 
@@ -57,7 +62,6 @@ class MapManager {
   ***************************************
   Improved version from https://github.com/ykwang11/ENPM808X_Midterm-Project_D-Star-Lite-Path-Planning/blob/master/app/main.cpp
 */
-
 
 
 /**
@@ -200,12 +204,14 @@ bool DStarOpenList::Find(const std::pair<int, int> &node_to_find) const {
  * @param width the size of the map
  * @return none
  */
-DStarMap::DStarMap(const int &height, const int &width) {
+
+ 
+DStarMap::DStarMap(MapManager &mm, ROBOT::TYPE robot_type) : mm(mm), robot_type(robot_type) {
     std::vector<std::vector<DStarCell>> new_grid(
-        height,
-        std::vector<DStarCell>(width, DStarCell(infinity_cost)));
+        mm.h,
+        std::vector<DStarCell>(mm.w, DStarCell(infinity_cost)));
     grid = new_grid;
-    map_size = std::make_pair(height, width);
+    map_size = std::make_pair(mm.h, mm.w);
 }
 
 /**
@@ -218,7 +224,7 @@ void DStarMap::AddObstacle(pair<int, int> obstacle) {
     grid.at(obstacle.first).at(obstacle.second).UpdateStatus(obstacle_mark);
 }
 
-
+//y,x
 void DStarMap::SetStart(const std::pair<int, int> &new_start) {
     start = new_start;
     km += Heuristic(new_start, goal);
@@ -241,6 +247,7 @@ void DStarMap::SetGoal(const std::pair<int, int> &new_goal) {
  * @return the position of the goal
  */
 std::pair<int, int> DStarMap::GetGoal() const { return goal; }
+std::pair<int, int> DStarMap::GetStart() const { return start; }
 
 /**
  * @brief Get the g-value of the cell with given position.
@@ -274,8 +281,8 @@ int DStarMap::Heuristic(const std::pair<int, int> & s1, const std::pair<int, int
 Key DStarMap::CalculateCellKey(const std::pair<int, int> &position) const {
     double h = Heuristic(this->start, this->goal);
     double key2 = std::min(CurrentCellG(position), CurrentCellRhs(position));
-    printf("key: {%.2f, %.2f} \n", key2+h+km, key2);
-    return Key(key2+h+km, key2);
+    double key1 = key2+h+km;
+    return Key(key1, key2); //TODO
 }
 
 /**
@@ -335,6 +342,7 @@ void DStarMap::SetInfiityCellG(const std::pair<int, int> &position) {
  * @param next_position next position of of the cell
  * @return cost to travel
  */
+
 double DStarMap::ComputeCost(const std::pair<int, int> &current_position,
                         const std::pair<int, int> &next_position) {
     if (!Availability(next_position)) return infinity_cost;
@@ -349,6 +357,7 @@ double DStarMap::ComputeCost(const std::pair<int, int> &current_position,
     else
         return infinity_cost;
 }
+
 
 /**
  * @brief Find eight neighbos that are reachable: not a obstacle nor outside.
@@ -439,7 +448,9 @@ void DStarMap::PrintResult() {
 class DStarImpl {
     public:
     DStarMap map;
-    DStarImpl(int map_w, int map_h) : map(DStarMap(map_w, map_h)) {
+    ROBOT::TYPE robot_type;
+
+    DStarImpl(MapManager &mm, ROBOT::TYPE robot_type): map(DStarMap(mm, robot_type)), robot_type(robot_type) { 
     }
     /**
      * @brief Initialize the map and the open list
@@ -463,8 +474,10 @@ class DStarImpl {
      * @param openlist_ptr the pointer of the open list
      * @return none
      */
-    void ComputeShortestPath(ROBOT robot) {
-        pair<int, int> robot_pos = make_pair(robot.get_coord().x, robot.get_coord().y);
+    void ComputeShortestPath() {
+        this->map.PrintResult();
+        pair<int, int> robot_pos = this->map.GetStart();
+        //TODO: If this->openlist is empty, invalid heap-read occurs.
         while (this->openlist.Top().first <
             this->map.CalculateCellKey(robot_pos) ||
             this->map.CurrentCellRhs(robot_pos) !=
@@ -492,8 +505,7 @@ class DStarImpl {
             }
         }
         // Show the new computed shortest path.
-        this->map.PrintValue();
-        this->map.PrintResult();
+        //this->map.PrintValue();
     }
 
     /**
@@ -555,7 +567,6 @@ class DStarImpl {
 
     void AddObstacle(std::pair<int, int> obstacle_pos) {
         this->map.AddObstacle(obstacle_pos);
-        this->map.UpdateCellStatus(obstacle_pos, this->map.obstacle_mark);
         // Update node's status
         UpdateVertex(obstacle_pos);
 
@@ -583,48 +594,49 @@ class DStarImpl {
 class TaskDstarLite {
     public:
     TaskDstarLite(int x, int y, MapManager &mm): task_x(x), task_y(y), mm(mm) {
-        dstars_map[ROBOT::TYPE::CATERPILLAR] = make_unique<DStarImpl>(mm.w, mm.h);
-        dstars_map[ROBOT::TYPE::WHEEL] = make_unique<DStarImpl>(mm.w, mm.h);
+        dstars_map[ROBOT::TYPE::CATERPILLAR] = make_unique<DStarImpl>(mm, ROBOT::TYPE::CATERPILLAR);
+        dstars_map[ROBOT::TYPE::WHEEL] = make_unique<DStarImpl>(mm, ROBOT::TYPE::WHEEL);
 
         // Set the task position and initialie DStar
-        dstars_map[ROBOT::TYPE::CATERPILLAR]->map.SetGoal(make_pair(task_x, task_y));
+        dstars_map[ROBOT::TYPE::CATERPILLAR]->map.SetGoal(make_pair(task_y, task_x));
         dstars_map[ROBOT::TYPE::CATERPILLAR]->Initialize();
-        dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_x, task_y));
+        dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_y, task_x));
         dstars_map[ROBOT::TYPE::WHEEL]->Initialize();
 
         // Conduct path plannign
-        update_all_walls();
-        replanning();
+       update_all_walls();
+       replanning();
+    }
+    
+    void replanning() {
+        //Update Map(Wall) latest nformation
+        update_latest_walls();    
+        dstars_map[ROBOT::TYPE::WHEEL]->map.SetStart({5,3});
+        dstars_map[ROBOT::TYPE::WHEEL]->ComputeShortestPath();
     }
 
+    int calculate_cost(ROBOT robot, vector<Coord>& RtoT) { 
+        //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
+    }
+
+    private:
+    void update_wall(pair<int, int> pos) {
+        dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(pos);
+        dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(pos);
+    }
     void update_all_walls() {
-        for(Coord v : mm.objects[OBJECT::WALL]) {
-            //printf("wall: (%d, %d) \n", v.x, v.y);
-            dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(make_pair(v.x, v.y));
-            dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(make_pair(v.x, v.y));
-        }
+        for(Coord v : mm.objects[OBJECT::WALL])
+            update_wall({v.y, v.x});
     }
 
     void update_latest_walls() {
         for(Coord v : mm.latest_observed_coords) {
             if(mm.object_map[v.x][v.y] == OBJECT::WALL) {
-                dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(make_pair(v.x, v.y));
-                dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(make_pair(v.x, v.y));
+                update_wall({v.y, v.x});
             }   
         }
     }
-    
-    void replanning() {
-        //Update Map(Wall) information
-        update_latest_walls();
-        dstars_map[ROBOT::TYPE::WHEEL]->map.PrintResult();
-    }
 
-    int calculate_cost(ROBOT robot, vector<Coord>& RtoT) {
-        //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
-    }
-
-    private:
     map<ROBOT::TYPE, unique_ptr<DStarImpl>> dstars_map;
     int task_x, task_y;
     int is_initialized;
@@ -664,34 +676,34 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
     }
 
     //TODO: MCMF
-    vector<vector<int>> distRT, distTT, robotPath;
-    vector<vector<vector<Coord>>> RtoT;
-    distRT = vector<vector<int>>(robots.size(), vector<int>(robots.size()));
-    distTT = vector<vector<int>>(active_tasks.size(), vector<int>(active_tasks.size()));
-    RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(active_tasks.size()));
+    // vector<vector<int>> distRT, distTT, robotPath;
+    // vector<vector<vector<Coord>>> RtoT;
+    // distRT = vector<vector<int>>(robots.size(), vector<int>(robots.size()));
+    // distTT = vector<vector<int>>(active_tasks.size(), vector<int>(active_tasks.size()));
+    // RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(active_tasks.size()));
 
-    int i=0, j=0;
-    for(auto& [task_id,task] : tasks_dstar){
-        for(const auto& robotPtr : robots){
-            distRT[i][j] = task.calculate_cost(*robotPtr, RtoT[i][j]);
-            j++;
-        }
-        i++;
-    }
+    // int i=0, j=0;
+    // for(auto& [task_id,task] : tasks_dstar){
+    //     for(const auto& robotPtr : robots){
+    //         distRT[i][j] = task.calculate_cost(*robotPtr, RtoT[i][j]);
+    //         j++;
+    //     }
+    //     i++;
+    // }
 
-    assign_tasks_mcmf(distRT, distTT, robotPath);
+    // assign_tasks_mcmf(distRT, distTT, robotPath);
 
-    int map_size = static_cast<int>(known_object_map.size());
-    for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
-        if (last_seen_time.count(id) == 0) {
-            last_seen_time[id] = vector<vector<int>>(map_size, vector<int>(map_size, -1));
-        }
-        for (const auto& coord : updated_coords) {
-            if (coord.x >= 0 && coord.x < map_size && coord.y >= 0 && coord.y < map_size) {
-                last_seen_time[id][coord.x][coord.y] = map_manager.tick;
-            }
-        }
-    }
+    // int map_size = static_cast<int>(known_object_map.size());
+    // for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
+    //     if (last_seen_time.count(id) == 0) {
+    //         last_seen_time[id] = vector<vector<int>>(map_size, vector<int>(map_size, -1));
+    //     }
+    //     for (const auto& coord : updated_coords) {
+    //         if (coord.x >= 0 && coord.x < map_size && coord.y >= 0 && coord.y < map_size) {
+    //             last_seen_time[id][coord.x][coord.y] = map_manager.tick;
+    //         }
+    //     }
+    // }
 }
 
 bool Scheduler::on_task_reached(const set<Coord> &observed_coords,

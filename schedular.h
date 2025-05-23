@@ -4,7 +4,28 @@
 #include "simulator.h"
 #include <memory>
 #include <vector>
+#include <map>
 
+
+using namespace std;
+
+class MapManager {
+    public:
+    int tick;
+    int w, h;
+    vector<vector<int>> observed_map;
+    vector<Coord> latest_observed_coords;
+    vector<vector<OBJECT>> object_map;
+    map<OBJECT, vector<Coord>> objects;
+    vector<vector<vector<int>>> cost_map;
+    map<ROBOT::TYPE, int> avg_costs;
+    int certain_coordN;
+
+    MapManager();
+
+    int update_map_info(vector<vector<OBJECT>>, vector<vector<vector<int>>>, set<Coord>, set<Coord>);
+    double cost_at(Coord, ROBOT::TYPE);
+};
 
 
 
@@ -16,6 +37,7 @@
 */
 
 
+
 struct Key {
     public:
     double key1;
@@ -23,8 +45,8 @@ struct Key {
 
     Key(double key1, double key2) : key1(key1), key2(key2) {};
     bool operator<(Key const & rhs) const {
-        return (this->key1 < rhs.key1) || (this->key2 < rhs.key2);
-    }
+        return tie(this->key1, this->key2) < tie(rhs.key1, rhs.key2);
+    } 
 \
 };
 
@@ -84,13 +106,14 @@ class DStarMap {
     const std::string unknown_mark = "?";
 
     // constructor and environment initializing
-    explicit DStarMap(const int &, const int &);
+    explicit DStarMap(MapManager &, ROBOT::TYPE);
     void AddObstacle(pair<int, int> );
     void SetStart(const std::pair<int, int> &);
     void SetGoal(const std::pair<int, int> &);
 
     // get method
     std::pair<int, int> GetGoal() const;
+    std::pair<int, int> GetStart() const;
     double CurrentCellG(const std::pair<int, int> &) const;
     int Heuristic(const std::pair<int, int> &, const std::pair<int, int> &) const;
     double CurrentCellRhs(const std::pair<int, int> &) const;
@@ -116,6 +139,8 @@ class DStarMap {
  private:
     std::pair<int, int> start;
     std::pair<int, int> goal;
+    MapManager &mm;
+    ROBOT::TYPE robot_type;
     double km;
     std::pair<int, int> map_size;
     std::vector<std::vector<DStarCell>> grid;
