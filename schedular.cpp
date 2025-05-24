@@ -44,7 +44,7 @@ int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector
 
 // known_cost_map sets uncertain coords to -1 and block to INT_MAX(std::numeric_limits<int>::max();)
 // TODO: Cost Type
-double MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
+int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     int cost = this->cost_map[pos.x][pos.y][static_cast<int>(type)];
     //uncertain coords
     if(cost < 0) {
@@ -69,7 +69,7 @@ double MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
  * @param initial_num a number for the inital g-value and rhs-value
  * @return none
  */
-DStarCell::DStarCell(const double &initial_num) {
+DStarCell::DStarCell(const int &initial_num) {
     g = initial_num;
     rhs = initial_num;
     status = " ";
@@ -79,13 +79,13 @@ DStarCell::DStarCell(const double &initial_num) {
  * @brief Get current g-value.
  * @return g-value
  */
-double DStarCell::CurrentG() const { return g; }
+int DStarCell::CurrentG() const { return g; }
 
 /**
  * @brief Get current rhs-value.
  * @return rhs-value
  */
-double DStarCell::CurrentRhs() const { return rhs; }
+int DStarCell::CurrentRhs() const { return rhs; }
 
 /**
  * @brief Get current status: obstacle, unknown obstacle, goal, or start point.
@@ -98,14 +98,14 @@ std::string DStarCell::CurrentStatus() const { return status; }
  * @param new_g new estamated distance to the goal
  * @return none
  */
-void DStarCell::UpdateG(const double &new_g) { g = new_g; }
+void DStarCell::UpdateG(const int &new_g) { g = new_g; }
 
 /**
  * @brief Set new rhs-value.
  * @param new_rhs one step lookahead values based on the g-values
  * @return none
  */
-void DStarCell::UpdateRhs(const double &new_rhs) { rhs = new_rhs; }
+void DStarCell::UpdateRhs(const int &new_rhs) { rhs = new_rhs; }
 
 /**
  * @brief Set new status.
@@ -254,7 +254,7 @@ std::pair<int, int> DStarMap::GetStart() const { return start; }
  * @param position the position of of the cell
  * @return cell's g-value
  */
-double DStarMap::CurrentCellG(const std::pair<int, int> &position) const {
+int DStarMap::CurrentCellG(const std::pair<int, int> &position) const {
     return grid.at(position.first).at(position.second).CurrentG();
 }
 
@@ -263,7 +263,7 @@ double DStarMap::CurrentCellG(const std::pair<int, int> &position) const {
  * @param position the position of of the cell
  * @return cell's rhs-value
  */
-double DStarMap::CurrentCellRhs(const std::pair<int, int> &position) const {
+int DStarMap::CurrentCellRhs(const std::pair<int, int> &position) const {
     return grid.at(position.first).at(position.second).CurrentRhs();
 }
 
@@ -279,9 +279,9 @@ int DStarMap::Heuristic(const std::pair<int, int> & s1, const std::pair<int, int
 }
 
 Key DStarMap::CalculateCellKey(const std::pair<int, int> &position) const {
-    double h = Heuristic(this->start, this->goal);
-    double key2 = std::min(CurrentCellG(position), CurrentCellRhs(position));
-    double key1 = key2+h+km;
+    int h = Heuristic(this->start, this->goal);
+    int key2 = std::min(CurrentCellG(position), CurrentCellRhs(position));
+    int key1 = key2+h+km;
     return Key(key1, key2); //TODO
 }
 
@@ -301,7 +301,7 @@ std::string DStarMap::CurrentCellStatus(const std::pair<int, int> &position) con
  * @return none
  */
 void DStarMap::UpdateCellG(const std::pair<int, int> &position,
-                      const double &new_g) {
+                      const int &new_g) {
     grid.at(position.first).at(position.second).UpdateG(new_g);
 }
 
@@ -312,7 +312,7 @@ void DStarMap::UpdateCellG(const std::pair<int, int> &position,
  * @return none
  */
 void DStarMap::UpdateCellRhs(const std::pair<int, int> &position,
-                        const double &new_rhs) {
+                        const int &new_rhs) {
     grid.at(position.first).at(position.second).UpdateRhs(new_rhs);
 }
 
@@ -343,7 +343,7 @@ void DStarMap::SetInfiityCellG(const std::pair<int, int> &position) {
  * @return cost to travel
  */
 
-double DStarMap::ComputeCost(const std::pair<int, int> &current_position,
+int DStarMap::ComputeCost(const std::pair<int, int> &current_position,
                         const std::pair<int, int> &next_position) {
     if (!Availability(next_position)) return infinity_cost;
     // if(next_position.first == 1 && next_position.second == 4)
@@ -533,8 +533,8 @@ class DStarImpl {
      * @param this->map the pointer of the map
      * @return minimum rhs 
      */
-    double ComputeMinRhs(const std::pair<int, int> &vertex) {
-        double min_rhs = this->map.infinity_cost;
+    int ComputeMinRhs(const std::pair<int, int> &vertex) {
+        int min_rhs = this->map.infinity_cost;
         auto neibors = this->map.FindNeighbors(vertex);
         for (auto const &next_vertex : neibors) {
             auto temp_rhs = this->map.ComputeCost(vertex, next_vertex) +
@@ -553,7 +553,7 @@ class DStarImpl {
     std::pair<int, int> ComputeNextPotision(
                         const std::pair<int, int> &current_position) {
         auto next_position = current_position;
-        double cheaest_cost = this->map.infinity_cost;
+        int cheaest_cost = this->map.infinity_cost;
         for (auto const &candidate : this->map.FindNeighbors(current_position)) {
             auto cost = this->map.ComputeCost(current_position, candidate) +
                         this->map.CurrentCellG(candidate);

@@ -24,7 +24,7 @@ class MapManager {
     MapManager();
 
     int update_map_info(vector<vector<OBJECT>>, vector<vector<vector<int>>>, set<Coord>, set<Coord>);
-    double cost_at(Coord, ROBOT::TYPE);
+    int cost_at(Coord, ROBOT::TYPE);
 };
 
 
@@ -40,10 +40,10 @@ class MapManager {
 
 struct Key {
     public:
-    double key1;
-    double key2;
+    int key1;
+    int key2;
 
-    Key(double key1, double key2) : key1(key1), key2(key2) {};
+    Key(int key1, int key2) : key1(key1), key2(key2) {};
     bool operator<(Key const & rhs) const {
         return tie(this->key1, this->key2) < tie(rhs.key1, rhs.key2);
     } 
@@ -63,17 +63,17 @@ class DStarRobot {
 
 class DStarCell{
  public:
-    explicit DStarCell(const double &);
-    double CurrentG() const;
-    double CurrentRhs() const;
+    explicit DStarCell(const int &);
+    int CurrentG() const;
+    int CurrentRhs() const;
     std::string CurrentStatus() const;
-    void UpdateG(const double &);
-    void UpdateRhs(const double &);
+    void UpdateG(const int &);
+    void UpdateRhs(const int &);
     void UpdateStatus(const std::string &);
 
  private:
-    double g = 0;
-    double rhs = 0;
+    int g = 0;
+    int rhs = 0;
     std::string status = "";
 };
 
@@ -94,9 +94,9 @@ class DStarOpenList {
 class DStarMap {
  public:
     // different costs
-    const double infinity_cost = 100.0;
-    const double diagonal_cost = 2.5;
-    const double transitional_cost = 1.0;
+    const int infinity_cost = 100.0;
+    const int diagonal_cost = 2.5;
+    const int transitional_cost = 1.0;
 
     // different status marks
     const std::string robot_mark = ".";
@@ -114,19 +114,19 @@ class DStarMap {
     // get method
     std::pair<int, int> GetGoal() const;
     std::pair<int, int> GetStart() const;
-    double CurrentCellG(const std::pair<int, int> &) const;
+    int CurrentCellG(const std::pair<int, int> &) const;
     int Heuristic(const std::pair<int, int> &, const std::pair<int, int> &) const;
-    double CurrentCellRhs(const std::pair<int, int> &) const;
+    int CurrentCellRhs(const std::pair<int, int> &) const;
     Key CalculateCellKey(const std::pair<int, int> &) const;
     std::string CurrentCellStatus(const std::pair<int, int> &) const;
 
     // set method
-    void UpdateCellG(const std::pair<int, int> &, const double &);
-    void UpdateCellRhs(const std::pair<int, int> &, const double &);
+    void UpdateCellG(const std::pair<int, int> &, const int &);
+    void UpdateCellRhs(const std::pair<int, int> &, const int &);
     void UpdateCellStatus(const std::pair<int, int> &, const std::string &);
     void SetInfiityCellG(const std::pair<int, int> &);
 
-    double ComputeCost(const std::pair<int, int> &,
+    int ComputeCost(const std::pair<int, int> &,
                        const std::pair<int, int> &);
 
     std::vector<std::pair<int, int>> FindNeighbors(const std::pair<int, int> &);
@@ -141,7 +141,7 @@ class DStarMap {
     std::pair<int, int> goal;
     MapManager &mm;
     ROBOT::TYPE robot_type;
-    double km;
+    int km;
     std::pair<int, int> map_size;
     std::vector<std::vector<DStarCell>> grid;
 };
