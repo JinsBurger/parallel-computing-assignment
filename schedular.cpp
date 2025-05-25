@@ -1072,8 +1072,6 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
         }
     }
 
-    printf("hmm\n");
-
     //  task layer k → k+1 (cap=T‑(k+1), cost=distTT)
     for (int k = 0; k < T - 1; ++k) {
         int capHere = T - (k + 1);             // 3,2,1,…
@@ -1088,7 +1086,6 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
                              distTT[i][j]);
     }
 
-    printf("hmm\n");
 
     //  마지막 task layer → ID (cap=1, cost=0)
     int lastBeg = TASK_BEG + (T - 1) * T;
