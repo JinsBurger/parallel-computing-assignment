@@ -1099,13 +1099,13 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
     for (int t = 0; t < T; ++t)
         mcmf.addEdge(ID_BEG + t, SINK, 1, 0);
     
-    printf("before MCMF:\n");
+/*    printf("before MCMF:\n");
     for(int i=0; i<mcmf.G.size(); i++){
         for(int j=0; j<mcmf.G[i].size(); j++){
             printf("%d %d %d %d\n",i,mcmf.G[i][j].to,mcmf.G[i][j].cap,mcmf.G[i][j].cost);
         }
     }
-
+*/
     // ---------- 실행 ----------
     
     auto result = mcmf.minCostMaxFlow(SRC, SINK);
@@ -1119,13 +1119,13 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
     robotPath.clear();
     robotPath = vector<vector<int>>(R, vector<int>(0));
 
-    printf("After mcmf:\n");
+/*    printf("After mcmf:\n");
     for(int i=0; i<mcmf.G.size(); i++){
         for(int j=0; j<mcmf.G[i].size(); j++){
             printf("%d %d %d %d\n",i,mcmf.G[i][j].to,mcmf.G[i][j].cap,mcmf.G[i][j].cost);
         }
     }
-
+*/
     //TODO: 수정
     for (int r = 0; r < R; ++r) {
         //printf("%d\n",r);
