@@ -42,19 +42,17 @@ int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector
     return this->latest_observed_coords.size();
 }
 
-// known_cost_map sets uncertain coords to -1 and block to INT_MAX(std::numeric_limits<int>::max();)
-// TODO: Cost Type
+// known_cost_map sets uncertain coords to -1 and block to INT_MAX(std::numeric_limits<int>::max();) 
 int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     int cost = this->cost_map[pos.x][pos.y][static_cast<int>(type)];
-    //uncertain coords
-    // if(cost < 0) {
-    //     cost = 1;//avg_costs[type] / certain_coordN;
-    // }
-
-    if(cost == INFINITE)
+    if(cost == INFINITE) {
         cost = g_infinity_cost;
-    if(cost != INFINITE)
+    }
+    else {
+        // TODO: if cost < 0 (= uncertain cells yet ),  returns the average of the costs of the "movable" cells.
+        //   - cost = avg_costs[type] / certain_coordN;
         cost = 1;
+    }
     return cost;
 }
 
