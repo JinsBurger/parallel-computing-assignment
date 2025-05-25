@@ -624,9 +624,9 @@ class TaskDstarLite {
 
     }
 
-    int calculate_cost(ROBOT robot, vector<Coord>& RtoT) { 
+    int calculate_cost(ROBOT robot, vector<Coord>& RtoT) {
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
-
+        return 10;
     }
     private:
     void update_wall(pair<int, int> pos) {
@@ -660,6 +660,7 @@ MapManager map_manager;
 //#define gravity_mode
 
 static map<int, vector<vector<int>>> last_seen_time;
+vector<queue<vector<Coord>>> robot_task;
 
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const set<Coord> &updated_coords,
@@ -684,24 +685,38 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                 tasks_dstar.at(task->id).replanning();
         }
     }
-
+    
+    if(is_replanning_needed && active_tasks.size()>0){
     //TODO: MCMF
-    // vector<vector<int>> distRT, distTT, robotPath;
-    // vector<vector<vector<Coord>>> RtoT;
-    // distRT = vector<vector<int>>(robots.size(), vector<int>(robots.size()));
-    // distTT = vector<vector<int>>(active_tasks.size(), vector<int>(active_tasks.size()));
-    // RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(active_tasks.size()));
+        printf("mcmf part starts\n");
+        vector<vector<int>> distRT, distTT, robotPath;
+        vector<vector<vector<Coord>>> RtoT;
+        distRT = vector<vector<int>>(robots.size(), vector<int>(tasks_dstar.size()));
+        distTT = vector<vector<int>>(tasks_dstar.size(), vector<int>(tasks_dstar.size()));
+        RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(tasks_dstar.size()));
+        robotPath.resize(robots.size());
+        //printf("resize done\n");
+        int i=0, j=0;
+        for(auto& [task_id,task] : tasks_dstar){
+            j=0;
+            for(const auto& robotPtr : robots){
+                distRT[j][i] = task.calculate_cost(*robotPtr, RtoT[j][i]);
+                j++;
+            }
+            i++;
+        }
+        printf("call assign_tasks_mcmf\n");
+        assign_tasks_mcmf(distRT, distTT, robotPath);
 
-    // int i=0, j=0;
-    // for(auto& [task_id,task] : tasks_dstar){
-    //     for(const auto& robotPtr : robots){
-    //         distRT[i][j] = task.calculate_cost(*robotPtr, RtoT[i][j]);
-    //         j++;
-    //     }
-    //     i++;
-    // }
-
-    // assign_tasks_mcmf(distRT, distTT, robotPath);
+        robot_task.clear();
+        robot_task.resize(robots.size());
+        for(int i=0; i<robots.size(); i++){
+            for(int j=0; j<robotPath[i].size(); j++){
+                robot_task[i].push(RtoT[i][robotPath[i][j]]);
+            }
+        }
+        printf("robot_task created\n");
+    }
 
     // int map_size = static_cast<int>(known_object_map.size());
     // for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
@@ -905,7 +920,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         // 모든 방향을 넣어서 fallback 시에도 반드시 이동하도록
         for (int i = 0; i < 4; ++i)
         {
-            if (find(dir_priority.begin(), dir_priority.end(), static_cast<ROBOT::ACTION>(i)) == dir_priority.end())
+            if (std::find(dir_priority.begin(), dir_priority.end(), static_cast<ROBOT::ACTION>(i)) == dir_priority.end())
                 dir_priority.push_back(static_cast<ROBOT::ACTION>(i));
         }
 
@@ -945,15 +960,15 @@ struct Edge {
 };
 
 class MCMF {
-    int N;                                       // 정점 수
-    vector<vector<Edge>> G;            // 인접 리스트
 public:
+    int N;                                       // 정점 수
+    std::vector<std::vector<Edge>> G;            // 인접 리스트
     explicit MCMF(int n) : N(n), G(n) {}
 
     // 정방향용 cap, 역방향용 cap=0 / cost=-cost 생성
     void addEdge(int s, int t, int cap, int cost) {
-        Edge fwd{t, (int)G[t].size(), cap,  cost};
-        Edge rev{s, (int)G[s].size(), 0,  -cost};
+        Edge fwd{t, static_cast<int>(G[t].size()), cap,  cost};
+        Edge rev{s, static_cast<int>(G[s].size()), 0,  -cost};
         G[s].push_back(fwd);
         G[t].push_back(rev);
     }
@@ -1027,6 +1042,8 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
 {
     const int R = static_cast<int>(distRT.size());
     const int T = distRT.empty() ? 0 : (int)distRT[0].size();
+
+    printf("R=%d T=%d\n",R,T);
     if (R == 0 || T == 0) return;              // 예외 처리
 
     // -------- 노드 인덱스 매핑 --------
@@ -1042,15 +1059,20 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
 
     //  source → robot (cap=1, cost=0)
     for (int r = 0; r < R; ++r)
-        mcmf.addEdge(SRC, ROBOT_BEG + r, 1, 0);
+        mcmf.addEdge(SRC, ROBOT_BEG + r, T, 0);
 
     //  robot → 첫 task layer (cap=T, cost=dist)
-    for (int r = 0; r < R; ++r)
-        for (int t = 0; t < T; ++t)
+    for (int r = 0; r < R; ++r){
+        for (int t = 0; t < T; ++t){
             mcmf.addEdge(ROBOT_BEG + r,
                          TASK_BEG + /*layer0*/ t,
                          T,
                          distRT[r][t]);
+            //printf("add %d %d %d %d\n",ROBOT_BEG + r,TASK_BEG + /*layer0*/ t,T,distRT[r][t]);
+        }
+    }
+
+    printf("hmm\n");
 
     //  task layer k → k+1 (cap=T‑(k+1), cost=distTT)
     for (int k = 0; k < T - 1; ++k) {
@@ -1066,6 +1088,8 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
                              distTT[i][j]);
     }
 
+    printf("hmm\n");
+
     //  마지막 task layer → ID (cap=1, cost=0)
     int lastBeg = TASK_BEG + (T - 1) * T;
     for (int t = 0; t < T; ++t)
@@ -1074,6 +1098,13 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
     //  ID → sink (cap=1, cost=0)
     for (int t = 0; t < T; ++t)
         mcmf.addEdge(ID_BEG + t, SINK, 1, 0);
+    
+    printf("before MCMF:\n");
+    for(int i=0; i<mcmf.G.size(); i++){
+        for(int j=0; j<mcmf.G[i].size(); j++){
+            printf("%d %d %d %d\n",i,mcmf.G[i][j].to,mcmf.G[i][j].cap,mcmf.G[i][j].cost);
+        }
+    }
 
     // ---------- 실행 ----------
     
@@ -1081,22 +1112,32 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
     int flow       = result.first;
     int totalCost  = result.second;
 
-    cout << "MCMF result : flow=" << flow << ", cost=" << totalCost << endl;
-
 
     /* ---------- 경로 추출 ---------- */
 
     const auto& G = mcmf.graph();
     robotPath.clear();
-    robotPath = vector<vector<int>>(R, vector<int>(R));
+    robotPath = vector<vector<int>>(R, vector<int>(0));
 
+    printf("After mcmf:\n");
+    for(int i=0; i<mcmf.G.size(); i++){
+        for(int j=0; j<mcmf.G[i].size(); j++){
+            printf("%d %d %d %d\n",i,mcmf.G[i][j].to,mcmf.G[i][j].cap,mcmf.G[i][j].cost);
+        }
+    }
+
+    //TODO: 수정
     for (int r = 0; r < R; ++r) {
+        //printf("%d\n",r);
         int node = ROBOT_BEG + r;                 // 로봇 노드부터 시작
         while (true) {
+            //printf("node: %d\n",node);
             bool advanced = false;
             for (const Edge& e : G[node]) {
                 // forward 간선으로 실제 flow가 흘렀다면 역간선 cap > 0
-                    if (G[e.to][e.rev].cap > 0) {
+                if(e.to < node) continue;
+                if (G[e.to][e.rev].cap > 0) {
+                    //printf("seeing %d %d %d %d\n",e.to,G[e.to][e.rev].to,G[e.to][e.rev].cap);
                     // 다음 노드가 task-layer 라인인가?
                     if (e.to >= TASK_BEG && e.to < TASK_BEG + T * T) {
                         int taskIdx = (e.to - TASK_BEG) % T;     // 0 ~ T-1
