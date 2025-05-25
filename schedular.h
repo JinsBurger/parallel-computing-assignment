@@ -9,6 +9,9 @@
 
 using namespace std;
 
+
+const uint32_t g_infinity_cost = 0x13371337; //Must be not negative-range of INT
+
 class MapManager {
     public:
     int tick;
@@ -94,9 +97,6 @@ class DStarOpenList {
 class DStarMap {
  public:
     // different costs
-    const int infinity_cost = 100.0;
-    const int diagonal_cost = 2.5;
-    const int transitional_cost = 1.0;
 
     // different status marks
     const std::string robot_mark = ".";
@@ -126,7 +126,7 @@ class DStarMap {
     void UpdateCellStatus(const std::pair<int, int> &, const std::string &);
     void SetInfiityCellG(const std::pair<int, int> &);
 
-    int ComputeCost(const std::pair<int, int> &,
+    uint32_t ComputeCost(const std::pair<int, int> &,
                        const std::pair<int, int> &);
 
     std::vector<std::pair<int, int>> FindNeighbors(const std::pair<int, int> &);

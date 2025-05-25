@@ -47,9 +47,14 @@ int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector
 int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     int cost = this->cost_map[pos.x][pos.y][static_cast<int>(type)];
     //uncertain coords
-    if(cost < 0) {
-        cost = avg_costs[type] / certain_coordN;
-    }
+    // if(cost < 0) {
+    //     cost = 1;//avg_costs[type] / certain_coordN;
+    // }
+
+    if(cost == INFINITE)
+        cost = g_infinity_cost;
+    if(cost != INFINITE)
+        cost = 1;
     return cost;
 }
 
@@ -209,7 +214,7 @@ bool DStarOpenList::Find(const std::pair<int, int> &node_to_find) const {
 DStarMap::DStarMap(MapManager &mm, ROBOT::TYPE robot_type) : mm(mm), robot_type(robot_type) {
     std::vector<std::vector<DStarCell>> new_grid(
         mm.h,
-        std::vector<DStarCell>(mm.w, DStarCell(infinity_cost)));
+        std::vector<DStarCell>(mm.w, DStarCell(g_infinity_cost)));
     grid = new_grid;
     map_size = std::make_pair(mm.h, mm.w);
 }
@@ -228,6 +233,7 @@ void DStarMap::AddObstacle(pair<int, int> obstacle) {
 void DStarMap::SetStart(const std::pair<int, int> &new_start) {
     start = new_start;
     km += Heuristic(new_start, goal);
+   // UpdateCellStatus(start, start_mark);
 }
 
 /**
@@ -333,7 +339,7 @@ void DStarMap::UpdateCellStatus(const std::pair<int, int> &position,
  * @return none
  */
 void DStarMap::SetInfiityCellG(const std::pair<int, int> &position) {
-    UpdateCellG(position, infinity_cost);
+    UpdateCellG(position, g_infinity_cost);
 }
 
 /**
@@ -343,19 +349,12 @@ void DStarMap::SetInfiityCellG(const std::pair<int, int> &position) {
  * @return cost to travel
  */
 
-int DStarMap::ComputeCost(const std::pair<int, int> &current_position,
+uint32_t DStarMap::ComputeCost(const std::pair<int, int> &current_position,
                         const std::pair<int, int> &next_position) {
-    if (!Availability(next_position)) return infinity_cost;
-    // if(next_position.first == 1 && next_position.second == 4)
-    //     return 0.3;
-    if (std::abs(current_position.first - next_position.first) +
-        std::abs(current_position.second - next_position.second) == 1)
-        return transitional_cost;
-    if (std::abs(current_position.first - next_position.first) +
-        std::abs(current_position.second - next_position.second) == 2)
-        return diagonal_cost;
-    else
-        return infinity_cost;
+    //printf("Availability(y:%d, x:%d) - %d\n", next_position.first, next_position.second, Availability(next_position));
+    if (!Availability(next_position)) return g_infinity_cost;
+    //printf("\t- cost_at(y:%d, x:%d) - %d\n", next_position.first, next_position.second, this->mm.cost_at({next_position.second, next_position.first}, this->robot_type));
+    return this->mm.cost_at({next_position.second, next_position.first}, this->robot_type);
 }
 
 
@@ -375,22 +374,21 @@ std::vector<std::pair<int, int>> DStarMap::FindNeighbors(
         auto neighbor = std::make_pair(position.first + i.first,
                                         position.second + i.second);
         auto cost = ComputeCost(position, neighbor);
-        if (cost < 100.0) // TODO
+        if (cost != g_infinity_cost) // TODO
             neighbors.push_back(neighbor);
     }
     return neighbors;
 }
 
 /**
- * @brief Check if the node is not a obstacle nor outside.
+ * @brief Check if the node is out scope of map
  * @param position the position of next position
  * @return true if accessible and flase if not 
  */
 bool DStarMap::Availability(const std::pair<int, int> & position) {
     if (position.first < 0 || position.first >= map_size.first) return false;
     if (position.second < 0 || position.second >= map_size.second) return false;
-    return grid.at(position.first).at(position.second).CurrentStatus()
-           != obstacle_mark;
+    return true;
 }
 
 /**
@@ -475,13 +473,17 @@ class DStarImpl {
      * @return none
      */
     void ComputeShortestPath() {
-        this->map.PrintResult();
         pair<int, int> robot_pos = this->map.GetStart();
+        this->map.PrintResult();
+        //this->map.PrintValue();
+
         //TODO: If this->openlist is empty, invalid heap-read occurs.
         while (this->openlist.Top().first <
             this->map.CalculateCellKey(robot_pos) ||
             this->map.CurrentCellRhs(robot_pos) !=
             this->map.CurrentCellG(robot_pos)) {
+            //this->map.PrintValue();
+
             auto key_and_node = this->openlist.Pop();
             auto node = key_and_node.second;
 
@@ -504,8 +506,8 @@ class DStarImpl {
                 }
             }
         }
+        
         // Show the new computed shortest path.
-        //this->map.PrintValue();
     }
 
     /**
@@ -534,11 +536,11 @@ class DStarImpl {
      * @return minimum rhs 
      */
     int ComputeMinRhs(const std::pair<int, int> &vertex) {
-        int min_rhs = this->map.infinity_cost;
+        int min_rhs = g_infinity_cost;
         auto neibors = this->map.FindNeighbors(vertex);
         for (auto const &next_vertex : neibors) {
-            auto temp_rhs = this->map.ComputeCost(vertex, next_vertex) +
-                            this->map.CurrentCellG(next_vertex);
+            uint32_t cost = this->map.ComputeCost(vertex, next_vertex);
+            auto temp_rhs = cost + this->map.CurrentCellG(next_vertex);
             if (temp_rhs < min_rhs) min_rhs = temp_rhs;
         }
         return min_rhs;
@@ -553,10 +555,10 @@ class DStarImpl {
     std::pair<int, int> ComputeNextPotision(
                         const std::pair<int, int> &current_position) {
         auto next_position = current_position;
-        int cheaest_cost = this->map.infinity_cost;
+        int cheaest_cost = g_infinity_cost;
         for (auto const &candidate : this->map.FindNeighbors(current_position)) {
-            auto cost = this->map.ComputeCost(current_position, candidate) +
-                        this->map.CurrentCellG(candidate);
+            auto cost = map.ComputeCost(current_position, candidate) +
+                    map.CurrentCellG(candidate);
             if (cost < cheaest_cost) {
                 cheaest_cost = cost;
                 next_position = candidate;
@@ -574,8 +576,8 @@ class DStarImpl {
                             this->map.FindNeighbors(obstacle_pos)) {
             UpdateVertex(candidate_neighbor);
         }
-        this->map.UpdateCellRhs(obstacle_pos, this->map.infinity_cost);
-        this->map.UpdateCellG(obstacle_pos, this->map.infinity_cost);
+        this->map.UpdateCellRhs(obstacle_pos, g_infinity_cost);
+        this->map.UpdateCellG(obstacle_pos, g_infinity_cost);
     }
 
     private:
@@ -613,12 +615,21 @@ class TaskDstarLite {
         update_latest_walls();    
         dstars_map[ROBOT::TYPE::WHEEL]->map.SetStart({5,3});
         dstars_map[ROBOT::TYPE::WHEEL]->ComputeShortestPath();
+        dstars_map[ROBOT::TYPE::WHEEL]->map.PrintResult();
+        //dstars_map[ROBOT::TYPE::WHEEL]->map.PrintValue();
+        auto robot_pos = dstars_map[ROBOT::TYPE::WHEEL]->map.GetStart();
+        while (robot_pos != dstars_map[ROBOT::TYPE::WHEEL]->map.GetGoal()) {
+            robot_pos = dstars_map[ROBOT::TYPE::WHEEL]->ComputeNextPotision(robot_pos);
+            cout << "(y: " << robot_pos.first << ", x: " << robot_pos.second << "),";
+        }
+        cout << endl;
+
     }
 
     int calculate_cost(ROBOT robot, vector<Coord>& RtoT) { 
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
-    }
 
+    }
     private:
     void update_wall(pair<int, int> pos) {
         dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(pos);
@@ -671,7 +682,8 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             tasks_dstar.insert(make_pair(task->id, TaskDstarLite(task->coord.x, task->coord.y, map_manager)));
         } else if(is_replanning_needed) {
             //None of coords found newly, not need to conduct replanning.
-            tasks_dstar.at(task->id).replanning();
+            if(task->id == 8)
+                tasks_dstar.at(task->id).replanning();
         }
     }
 
