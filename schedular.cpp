@@ -657,36 +657,32 @@ class TaskDstarLite {
     }
 
     private:
-    void update_wall(pair<int, int> pos) {
-        dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(pos);
-        dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(pos);
+    //pos = {y,x}
+    void update_object(pair<int, int> pos) {
+        if(mm.object_map[pos.second][pos.first] == OBJECT::WALL) {
+            dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(pos);
+            dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(pos);
+        } else if(mm.object_map[pos.second][pos.first] == OBJECT::EMPTY) {
+            dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus(pos, " ");
+            dstars_map[ROBOT::TYPE::CATERPILLAR]->map.UpdateCellStatus(pos, " ");
+            //Update vertices of newly observed movable coords, 
+            dstars_map[ROBOT::TYPE::WHEEL]->UpdateVertex(pos);
+            dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateVertex(pos);
+        }
     }
     void update_all_walls() {
         // for(Coord v : mm.objects[OBJECT::WALL])
         //     update_wall({v.y, v.x});
         for(int x=0; x < mm.observed_map.size(); x++){
             for(int y=0; y < mm.observed_map.size(); y++) {
-                if(mm.object_map[x][y] == OBJECT::WALL)
-                    update_wall({y, x});
-                 else if(mm.object_map[x][y] == OBJECT::EMPTY) {
-                        dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus({y,x}, " ");
-                        dstars_map[ROBOT::TYPE::CATERPILLAR]->map.UpdateCellStatus({y,x}, " ");
-                    }
-                
+                update_object({y,x});
             }
         }
     }
 
     void update_latest_coords() {
         for(Coord v : mm.latest_observed_coords) {
-            if(mm.object_map[v.x][v.y] == OBJECT::WALL) {
-                update_wall({v.y, v.x});
-            } else if(mm.object_map[v.x][v.y] == OBJECT::EMPTY) {
-                dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus({v.y, v.x}, " ");
-                //Update vertices of newly observed movable coords, 
-                dstars_map[ROBOT::TYPE::WHEEL]->UpdateVertex({v.y, v.x});
-                dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateVertex({v.y, v.x});
-            }
+            update_object({v.y,v.x});
         }
     }
 
