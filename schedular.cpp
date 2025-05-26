@@ -643,8 +643,13 @@ class TaskDstarLite {
             path.push_back({robot_pos.second, robot_pos.first});
             cost += mm.cost_at({robot_pos.second, robot_pos.first}, robot_type);
             #ifdef DSTAR_VERBOSE
-            if(robot_pos != dstars_map[robot_type]->map.GetGoal())
-                new_grid.at(robot_pos.first).at(robot_pos.second).UpdateStatus("\033[31;43m■\033[0m" );
+            if(robot_pos != dstars_map[robot_type]->map.GetGoal()) {
+                if(new_grid.at(robot_pos.first).at(robot_pos.second).CurrentStatus() == "$") { // Unobserved yet
+                    new_grid.at(robot_pos.first).at(robot_pos.second).UpdateStatus("\033[32;43m■\033[0m" );
+                } else {
+                    new_grid.at(robot_pos.first).at(robot_pos.second).UpdateStatus("\033[31;43m■\033[0m" );
+                }
+            }
             #endif
         }
 
