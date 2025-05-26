@@ -141,7 +141,7 @@ class DStarMap {
     std::pair<int, int> goal;
     MapManager &mm;
     ROBOT::TYPE robot_type;
-    int km;
+    int km = 0;
     std::pair<int, int> map_size;
     std::vector<std::vector<DStarCell>> grid;
 };

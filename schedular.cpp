@@ -50,8 +50,8 @@ int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     }
     else {
         // TODO: if cost < 0 (= uncertain cells yet ),  returns the average of the costs of the "movable" cells.
-        //   - cost = avg_costs[type] / certain_coordN;
-        cost = 1;
+        cost = avg_costs[type] / certain_coordN;
+        //cost = 1;
     }
     return cost;
 }
@@ -283,10 +283,10 @@ int DStarMap::Heuristic(const std::pair<int, int> & s1, const std::pair<int, int
 }
 
 Key DStarMap::CalculateCellKey(const std::pair<int, int> &position) const {
-    int h = Heuristic(this->start, this->goal);
+    int h = Heuristic(position, this->goal);
     int key2 = std::min(CurrentCellG(position), CurrentCellRhs(position));
     int key1 = key2+h+km;
-    return Key(key1, key2); //TODO
+    return Key(key1, key2);
 }
 
 /**
@@ -372,7 +372,7 @@ std::vector<std::pair<int, int>> DStarMap::FindNeighbors(
         auto neighbor = std::make_pair(position.first + i.first,
                                         position.second + i.second);
         auto cost = ComputeCost(position, neighbor);
-        if (cost != g_infinity_cost) // TODO
+        if (cost < g_infinity_cost) // TODO
             neighbors.push_back(neighbor);
     }
     return neighbors;
@@ -472,7 +472,7 @@ class DStarImpl {
      */
     void ComputeShortestPath() {
         pair<int, int> robot_pos = this->map.GetStart();
-        this->map.PrintResult();
+        //this->map.PrintResult();
         //this->map.PrintValue();
 
         //TODO: If this->openlist is empty, invalid heap-read occurs.
@@ -555,7 +555,7 @@ class DStarImpl {
         auto next_position = current_position;
         int cheaest_cost = g_infinity_cost;
         for (auto const &candidate : this->map.FindNeighbors(current_position)) {
-            auto cost = map.ComputeCost(current_position, candidate) +
+            uint32_t cost = map.ComputeCost(current_position, candidate) +
                     map.CurrentCellG(candidate);
             if (cost < cheaest_cost) {
                 cheaest_cost = cost;
@@ -609,8 +609,8 @@ class TaskDstarLite {
     }
     
     void replanning() {
-        //Update Map(Wall) latest nformation
-        update_latest_walls();    
+        //Update latest coordinates
+        update_latest_coords();    
         dstars_map[ROBOT::TYPE::WHEEL]->map.SetStart({5,3});
         dstars_map[ROBOT::TYPE::WHEEL]->ComputeShortestPath();
         dstars_map[ROBOT::TYPE::WHEEL]->map.PrintResult();
@@ -638,11 +638,15 @@ class TaskDstarLite {
             update_wall({v.y, v.x});
     }
 
-    void update_latest_walls() {
+    void update_latest_coords() {
         for(Coord v : mm.latest_observed_coords) {
             if(mm.object_map[v.x][v.y] == OBJECT::WALL) {
                 update_wall({v.y, v.x});
-            }   
+            } else {
+                //Update vertices of newly observed movable coords, 
+                dstars_map[ROBOT::TYPE::WHEEL]->UpdateVertex({v.y, v.x});
+                dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateVertex({v.y, v.x});
+            }
         }
     }
 
@@ -681,8 +685,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             tasks_dstar.insert(make_pair(task->id, TaskDstarLite(task->coord.x, task->coord.y, map_manager)));
         } else if(is_replanning_needed) {
             //None of coords found newly, not need to conduct replanning.
-            if(task->id == 8)
-                tasks_dstar.at(task->id).replanning();
+            tasks_dstar.at(task->id).replanning();
         }
     }
     
