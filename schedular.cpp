@@ -627,32 +627,33 @@ class TaskDstarLite {
         update_latest_coords();    
     }
 
-    int calculate_cost(shared_ptr<ROBOT> &robot, vector<vector<vector<Coord>>> RtoT) {
+    int calculate_cost(Coord pos, ROBOT::TYPE robot_type, vector<Coord> &path) {
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
-        pair<int, int> robot_pos = {robot->get_coord().y, robot->get_coord().x};
+        pair<int, int> robot_pos = {pos.y, pos.x};
         uint32_t cost = 0;
-        dstars_map[robot->type]->map.SetStart(robot_pos);
-        dstars_map[robot->type]->ComputeShortestPath();
+        dstars_map[robot_type]->map.SetStart(robot_pos);
+        dstars_map[robot_type]->ComputeShortestPath();
 
         #ifdef DSTAR_VERBOSE
         std::vector<std::vector<DStarCell>> new_grid;
-        dstars_map[robot->type]->map.clone_grid(new_grid);
+        dstars_map[robot_type]->map.clone_grid(new_grid);
         #endif
-        while (robot_pos != dstars_map[robot->type]->map.GetGoal()) {
-            robot_pos = dstars_map[robot->type]->ComputeNextPotision(robot_pos);
-            cost += mm.cost_at({robot_pos.second, robot_pos.first}, robot->type);
+        while (robot_pos != dstars_map[robot_type]->map.GetGoal()) {
+            robot_pos = dstars_map[robot_type]->ComputeNextPotision(robot_pos);
+            path.push_back({robot_pos.second, robot_pos.first});
+            cost += mm.cost_at({robot_pos.second, robot_pos.first}, robot_type);
             #ifdef DSTAR_VERBOSE
-            if(robot_pos != dstars_map[robot->type]->map.GetGoal())
+            if(robot_pos != dstars_map[robot_type]->map.GetGoal())
                 new_grid.at(robot_pos.first).at(robot_pos.second).UpdateStatus("\033[31;43m■\033[0m" );
             #endif
         }
 
         #ifdef DSTAR_VERBOSE
         cout << "COST: " << cost << endl;
-        dstars_map[robot->type]->map.PrintResult(new_grid);
+        dstars_map[robot_type]->map.PrintResult(new_grid);
         #endif
 
-        return 10;
+        return cost;
     }
 
     private:
@@ -729,14 +730,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         }
     }
 
-    vector<vector<vector<Coord>>> RtoT;
-    for(auto r : robots) {
-        if(r->type == ROBOT::TYPE::CATERPILLAR || r->type == ROBOT::TYPE::WHEEL) {
-            for(auto task : active_tasks) {
-                tasks_dstar.at(task->id).calculate_cost(r, RtoT);
-            }
-        }
-    }
+    
     
     if(is_replanning_needed && active_tasks.size()>0){
     //TODO: MCMF
@@ -752,7 +746,9 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         for(auto& [task_id,task] : tasks_dstar){
             j=0;
             for(const auto& robotPtr : robots){
-                distRT[j][i] = task.calculate_cost(*robotPtr, RtoT[j][i]);
+                if(robotPtr->type == ROBOT::TYPE::CATERPILLAR || robotPtr->type == ROBOT::TYPE::WHEEL) {
+                    distRT[j][i] = task.calculate_cost(robotPtr->get_coord(), robotPtr->type, RtoT[j][i]);
+                }
                 j++;
             }
             i++;
