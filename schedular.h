@@ -20,7 +20,6 @@ class MapManager {
     vector<Coord> latest_observed_coords;
     vector<vector<OBJECT>> object_map;
     map<OBJECT, vector<Coord>> objects;
-    vector<vector<vector<int>>> cost_map;
     map<ROBOT::TYPE, int> avg_costs;
     int certain_coordN;
 
@@ -28,6 +27,9 @@ class MapManager {
 
     int update_map_info(vector<vector<OBJECT>>, vector<vector<vector<int>>>, set<Coord>, set<Coord>);
     int cost_at(Coord, ROBOT::TYPE);
+
+    private:
+    vector<vector<vector<int>>> cost_map;
 };
 
 

@@ -47,11 +47,9 @@ int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     int cost = this->cost_map[pos.x][pos.y][static_cast<int>(type)];
     if(cost == INFINITE) {
         cost = g_infinity_cost;
-    }
-    else {
+    } else if (cost < 0) {
         // TODO: if cost < 0 (= uncertain cells yet ),  returns the average of the costs of the "movable" cells.
-        //cost = avg_costs[type] / certain_coordN;
-        cost = 1;
+        cost = avg_costs[type] / certain_coordN;
     }
     return cost;
 }
@@ -560,17 +558,6 @@ class DStarImpl {
     }
 
 
-    uint32_t GetCost() {
-        int cheaest_cost = g_infinity_cost;
-        for (auto const &candidate : this->map.FindNeighbors(this->map.GetStart())) {
-            uint32_t cost = map.ComputeCost(this->map.GetStart(), candidate) +
-                    map.CurrentCellG(candidate);
-            if (cost < cheaest_cost) {
-                cheaest_cost = cost;
-            }
-        }
-        return cheaest_cost;
-    }
     /**
      * @brief Find next position with minimum g-value plus travel cost
      * @param current_position the position of the current node
@@ -638,12 +625,12 @@ class TaskDstarLite {
     void replanning() {
         //Update latest coordinates
         update_latest_coords();    
-
     }
 
     int calculate_cost(shared_ptr<ROBOT> &robot, vector<vector<vector<Coord>>> RtoT) {
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
         pair<int, int> robot_pos = {robot->get_coord().y, robot->get_coord().x};
+        uint32_t cost = 0;
         dstars_map[robot->type]->map.SetStart(robot_pos);
         dstars_map[robot->type]->ComputeShortestPath();
 
@@ -653,6 +640,7 @@ class TaskDstarLite {
         #endif
         while (robot_pos != dstars_map[robot->type]->map.GetGoal()) {
             robot_pos = dstars_map[robot->type]->ComputeNextPotision(robot_pos);
+            cost += mm.cost_at({robot_pos.second, robot_pos.first}, robot->type);
             #ifdef DSTAR_VERBOSE
             if(robot_pos != dstars_map[robot->type]->map.GetGoal())
                 new_grid.at(robot_pos.first).at(robot_pos.second).UpdateStatus("\033[31;43m■\033[0m" );
@@ -660,7 +648,7 @@ class TaskDstarLite {
         }
 
         #ifdef DSTAR_VERBOSE
-        cout << "COST: " << dstars_map[robot->type]->GetCost() << endl;
+        cout << "COST: " << cost << endl;
         dstars_map[robot->type]->map.PrintResult(new_grid);
         #endif
 
@@ -750,49 +738,49 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         }
     }
     
-    // if(is_replanning_needed && active_tasks.size()>0){
-    // //TODO: MCMF
-    //     printf("mcmf part starts\n");
-    //     vector<vector<int>> distRT, distTT, robotPath;
-    //     vector<vector<vector<Coord>>> RtoT;
-    //     distRT = vector<vector<int>>(robots.size(), vector<int>(tasks_dstar.size()));
-    //     distTT = vector<vector<int>>(tasks_dstar.size(), vector<int>(tasks_dstar.size()));
-    //     RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(tasks_dstar.size()));
-    //     robotPath.resize(robots.size());
-    //     //printf("resize done\n");
-    //     int i=0, j=0;
-    //     for(auto& [task_id,task] : tasks_dstar){
-    //         j=0;
-    //         for(const auto& robotPtr : robots){
-    //             distRT[j][i] = task.calculate_cost(*robotPtr, RtoT[j][i]);
-    //             j++;
-    //         }
-    //         i++;
-    //     }
-    //     printf("call assign_tasks_mcmf\n");
-    //     assign_tasks_mcmf(distRT, distTT, robotPath);
+    if(is_replanning_needed && active_tasks.size()>0){
+    //TODO: MCMF
+        printf("mcmf part starts\n");
+        vector<vector<int>> distRT, distTT, robotPath;
+        vector<vector<vector<Coord>>> RtoT;
+        distRT = vector<vector<int>>(robots.size(), vector<int>(tasks_dstar.size()));
+        distTT = vector<vector<int>>(tasks_dstar.size(), vector<int>(tasks_dstar.size()));
+        RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(tasks_dstar.size()));
+        robotPath.resize(robots.size());
+        //printf("resize done\n");
+        int i=0, j=0;
+        for(auto& [task_id,task] : tasks_dstar){
+            j=0;
+            for(const auto& robotPtr : robots){
+                distRT[j][i] = task.calculate_cost(*robotPtr, RtoT[j][i]);
+                j++;
+            }
+            i++;
+        }
+        printf("call assign_tasks_mcmf\n");
+        assign_tasks_mcmf(distRT, distTT, robotPath);
 
-    //     robot_task.clear();
-    //     robot_task.resize(robots.size());
-    //     for(int i=0; i<robots.size(); i++){
-    //         for(int j=0; j<robotPath[i].size(); j++){
-    //             robot_task[i].push(RtoT[i][robotPath[i][j]]);
-    //         }
-    //     }
-    //     printf("robot_task created\n");
-    // }
+        robot_task.clear();
+        robot_task.resize(robots.size());
+        for(int i=0; i<robots.size(); i++){
+            for(int j=0; j<robotPath[i].size(); j++){
+                robot_task[i].push(RtoT[i][robotPath[i][j]]);
+            }
+        }
+        printf("robot_task created\n");
+    }
 
-    // int map_size = static_cast<int>(known_object_map.size());
-    // for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
-    //     if (last_seen_time.count(id) == 0) {
-    //         last_seen_time[id] = vector<vector<int>>(map_size, vector<int>(map_size, -1));
-    //     }
-    //     for (const auto& coord : updated_coords) {
-    //         if (coord.x >= 0 && coord.x < map_size && coord.y >= 0 && coord.y < map_size) {
-    //             last_seen_time[id][coord.x][coord.y] = map_manager.tick;
-    //         }
-    //     }
-    // }
+    int map_size = static_cast<int>(known_object_map.size());
+    for (int id = 0; id < static_cast<int>(robots.size()); ++id) {
+        if (last_seen_time.count(id) == 0) {
+            last_seen_time[id] = vector<vector<int>>(map_size, vector<int>(map_size, -1));
+        }
+        for (const auto& coord : updated_coords) {
+            if (coord.x >= 0 && coord.x < map_size && coord.y >= 0 && coord.y < map_size) {
+                last_seen_time[id][coord.x][coord.y] = map_manager.tick;
+            }
+        }
+    }
 }
 
 bool Scheduler::on_task_reached(const set<Coord> &observed_coords,
