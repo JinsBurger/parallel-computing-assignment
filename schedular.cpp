@@ -50,8 +50,8 @@ int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     }
     else {
         // TODO: if cost < 0 (= uncertain cells yet ),  returns the average of the costs of the "movable" cells.
-        cost = avg_costs[type] / certain_coordN;
-        //cost = 1;
+        //cost = avg_costs[type] / certain_coordN;
+        cost = 1;
     }
     return cost;
 }
@@ -215,6 +215,10 @@ DStarMap::DStarMap(MapManager &mm, ROBOT::TYPE robot_type) : mm(mm), robot_type(
         std::vector<DStarCell>(mm.w, DStarCell(g_infinity_cost)));
     grid = new_grid;
     map_size = std::make_pair(mm.h, mm.w);
+
+    for(int i=0; i < mm.h; i++)
+        for(int j=0; j < mm.w; j++)
+            UpdateCellStatus({i, j}, "$");
 }
 
 /**
@@ -229,9 +233,11 @@ void DStarMap::AddObstacle(pair<int, int> obstacle) {
 
 //y,x
 void DStarMap::SetStart(const std::pair<int, int> &new_start) {
+    //UpdateCellStatus(start, " ");
     start = new_start;
     km += Heuristic(new_start, goal);
-   // UpdateCellStatus(start, start_mark);
+    UpdateCellStatus(start, start_mark);
+    
 }
 
 /**
@@ -289,6 +295,11 @@ Key DStarMap::CalculateCellKey(const std::pair<int, int> &position) const {
     return Key(key1, key2);
 }
 
+
+
+void DStarMap::clone_grid(std::vector<std::vector<DStarCell>> &new_grid) {
+    new_grid = grid;
+}
 /**
  * @brief Get the status of the cell with given position.
  * @param position the position of of the cell
@@ -394,6 +405,7 @@ bool DStarMap::Availability(const std::pair<int, int> & position) {
  * @brief Visualize all g-values and rhs-values in the map on the terminal.
  *  
  */
+
 void DStarMap::PrintValue() {
     std::vector<std::string> lines(map_size.second, "-------------");
     std::cout << "Value for shortest path:" << std::endl
@@ -419,7 +431,11 @@ void DStarMap::PrintValue() {
  * @brief Visualize the map and the path the robot has traveled on the terminal.
  *  
  */
-void DStarMap::PrintResult() {
+void DStarMap::PrintResult() { 
+    PrintResult(this->grid); 
+}
+
+void DStarMap::PrintResult(std::vector<std::vector<DStarCell>> &tgrid) {
     std::vector<std::string> lines(map_size.second, "----");
     std::cout << "Result: " << std::endl
         << "start: " << start_mark << " goal: " << goal_mark << " robot: "
@@ -428,7 +444,7 @@ void DStarMap::PrintResult() {
     std::cout << " -";
     for (auto line : lines) std::cout << line;
     std::cout << std::endl;
-    for (auto const &row : grid) {
+    for (auto const &row : tgrid) {
         std::cout << " | ";
         for (auto const &cell : row) {
             std::cout << cell.CurrentStatus() << " | ";
@@ -480,7 +496,6 @@ class DStarImpl {
             this->map.CalculateCellKey(robot_pos) ||
             this->map.CurrentCellRhs(robot_pos) !=
             this->map.CurrentCellG(robot_pos)) {
-            //this->map.PrintValue();
 
             auto key_and_node = this->openlist.Pop();
             auto node = key_and_node.second;
@@ -544,11 +559,23 @@ class DStarImpl {
         return min_rhs;
     }
 
+
+    uint32_t GetCost() {
+        int cheaest_cost = g_infinity_cost;
+        for (auto const &candidate : this->map.FindNeighbors(this->map.GetStart())) {
+            uint32_t cost = map.ComputeCost(this->map.GetStart(), candidate) +
+                    map.CurrentCellG(candidate);
+            if (cost < cheaest_cost) {
+                cheaest_cost = cost;
+            }
+        }
+        return cheaest_cost;
+    }
     /**
      * @brief Find next position with minimum g-value plus travel cost
      * @param current_position the position of the current node
      * @param this->map the pointer of the map
-     * @return next position in the shortest path
+     * @return cost and next position in the shortest path
      */
     std::pair<int, int> ComputeNextPotision(
                         const std::pair<int, int> &current_position) {
@@ -602,7 +629,7 @@ class TaskDstarLite {
         dstars_map[ROBOT::TYPE::CATERPILLAR]->Initialize();
         dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_y, task_x));
         dstars_map[ROBOT::TYPE::WHEEL]->Initialize();
-
+        
         // Conduct path plannign
        update_all_walls();
        replanning();
@@ -611,44 +638,69 @@ class TaskDstarLite {
     void replanning() {
         //Update latest coordinates
         update_latest_coords();    
-        dstars_map[ROBOT::TYPE::WHEEL]->map.SetStart({5,3});
-        dstars_map[ROBOT::TYPE::WHEEL]->ComputeShortestPath();
-        dstars_map[ROBOT::TYPE::WHEEL]->map.PrintResult();
-        //dstars_map[ROBOT::TYPE::WHEEL]->map.PrintValue();
-        auto robot_pos = dstars_map[ROBOT::TYPE::WHEEL]->map.GetStart();
-        while (robot_pos != dstars_map[ROBOT::TYPE::WHEEL]->map.GetGoal()) {
-            robot_pos = dstars_map[ROBOT::TYPE::WHEEL]->ComputeNextPotision(robot_pos);
-            cout << "(y: " << robot_pos.first << ", x: " << robot_pos.second << "),";
-        }
-        cout << endl;
 
     }
 
-    int calculate_cost(ROBOT robot, vector<Coord>& RtoT) {
+    int calculate_cost(shared_ptr<ROBOT> &robot, vector<vector<vector<Coord>>> RtoT) {
         //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
+        pair<int, int> robot_pos = {robot->get_coord().y, robot->get_coord().x};
+        dstars_map[robot->type]->map.SetStart(robot_pos);
+        dstars_map[robot->type]->ComputeShortestPath();
+
+        #ifdef DSTAR_VERBOSE
+        std::vector<std::vector<DStarCell>> new_grid;
+        dstars_map[robot->type]->map.clone_grid(new_grid);
+        #endif
+        while (robot_pos != dstars_map[robot->type]->map.GetGoal()) {
+            robot_pos = dstars_map[robot->type]->ComputeNextPotision(robot_pos);
+            #ifdef DSTAR_VERBOSE
+            if(robot_pos != dstars_map[robot->type]->map.GetGoal())
+                new_grid.at(robot_pos.first).at(robot_pos.second).UpdateStatus("\033[31;43m■\033[0m" );
+            #endif
+        }
+
+        #ifdef DSTAR_VERBOSE
+        cout << "COST: " << dstars_map[robot->type]->GetCost() << endl;
+        dstars_map[robot->type]->map.PrintResult(new_grid);
+        #endif
+
         return 10;
     }
+
     private:
     void update_wall(pair<int, int> pos) {
         dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(pos);
         dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(pos);
     }
     void update_all_walls() {
-        for(Coord v : mm.objects[OBJECT::WALL])
-            update_wall({v.y, v.x});
+        // for(Coord v : mm.objects[OBJECT::WALL])
+        //     update_wall({v.y, v.x});
+        for(int x=0; x < mm.observed_map.size(); x++){
+            for(int y=0; y < mm.observed_map.size(); y++) {
+                if(mm.object_map[x][y] == OBJECT::WALL)
+                    update_wall({y, x});
+                 else if(mm.object_map[x][y] == OBJECT::EMPTY) {
+                        dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus({y,x}, " ");
+                        dstars_map[ROBOT::TYPE::CATERPILLAR]->map.UpdateCellStatus({y,x}, " ");
+                    }
+                
+            }
+        }
     }
 
     void update_latest_coords() {
         for(Coord v : mm.latest_observed_coords) {
             if(mm.object_map[v.x][v.y] == OBJECT::WALL) {
                 update_wall({v.y, v.x});
-            } else {
+            } else if(mm.object_map[v.x][v.y] == OBJECT::EMPTY) {
+                dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus({v.y, v.x}, " ");
                 //Update vertices of newly observed movable coords, 
                 dstars_map[ROBOT::TYPE::WHEEL]->UpdateVertex({v.y, v.x});
                 dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateVertex({v.y, v.x});
             }
         }
     }
+
 
     map<ROBOT::TYPE, unique_ptr<DStarImpl>> dstars_map;
     int task_x, task_y;
@@ -688,38 +740,47 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             tasks_dstar.at(task->id).replanning();
         }
     }
-    
-    if(is_replanning_needed && active_tasks.size()>0){
-    //TODO: MCMF
-        printf("mcmf part starts\n");
-        vector<vector<int>> distRT, distTT, robotPath;
-        vector<vector<vector<Coord>>> RtoT;
-        distRT = vector<vector<int>>(robots.size(), vector<int>(tasks_dstar.size()));
-        distTT = vector<vector<int>>(tasks_dstar.size(), vector<int>(tasks_dstar.size()));
-        RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(tasks_dstar.size()));
-        robotPath.resize(robots.size());
-        //printf("resize done\n");
-        int i=0, j=0;
-        for(auto& [task_id,task] : tasks_dstar){
-            j=0;
-            for(const auto& robotPtr : robots){
-                distRT[j][i] = task.calculate_cost(*robotPtr, RtoT[j][i]);
-                j++;
-            }
-            i++;
-        }
-        printf("call assign_tasks_mcmf\n");
-        assign_tasks_mcmf(distRT, distTT, robotPath);
 
-        robot_task.clear();
-        robot_task.resize(robots.size());
-        for(int i=0; i<robots.size(); i++){
-            for(int j=0; j<robotPath[i].size(); j++){
-                robot_task[i].push(RtoT[i][robotPath[i][j]]);
+    vector<vector<vector<Coord>>> RtoT;
+    for(auto r : robots) {
+        if(r->type == ROBOT::TYPE::CATERPILLAR || r->type == ROBOT::TYPE::WHEEL) {
+            for(auto task : active_tasks) {
+                tasks_dstar.at(task->id).calculate_cost(r, RtoT);
             }
         }
-        printf("robot_task created\n");
     }
+    
+    // if(is_replanning_needed && active_tasks.size()>0){
+    // //TODO: MCMF
+    //     printf("mcmf part starts\n");
+    //     vector<vector<int>> distRT, distTT, robotPath;
+    //     vector<vector<vector<Coord>>> RtoT;
+    //     distRT = vector<vector<int>>(robots.size(), vector<int>(tasks_dstar.size()));
+    //     distTT = vector<vector<int>>(tasks_dstar.size(), vector<int>(tasks_dstar.size()));
+    //     RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(tasks_dstar.size()));
+    //     robotPath.resize(robots.size());
+    //     //printf("resize done\n");
+    //     int i=0, j=0;
+    //     for(auto& [task_id,task] : tasks_dstar){
+    //         j=0;
+    //         for(const auto& robotPtr : robots){
+    //             distRT[j][i] = task.calculate_cost(*robotPtr, RtoT[j][i]);
+    //             j++;
+    //         }
+    //         i++;
+    //     }
+    //     printf("call assign_tasks_mcmf\n");
+    //     assign_tasks_mcmf(distRT, distTT, robotPath);
+
+    //     robot_task.clear();
+    //     robot_task.resize(robots.size());
+    //     for(int i=0; i<robots.size(); i++){
+    //         for(int j=0; j<robotPath[i].size(); j++){
+    //             robot_task[i].push(RtoT[i][robotPath[i][j]]);
+    //         }
+    //     }
+    //     printf("robot_task created\n");
+    // }
 
     // int map_size = static_cast<int>(known_object_map.size());
     // for (int id = 0; id < static_cast<int>(robots.size()); ++id) {

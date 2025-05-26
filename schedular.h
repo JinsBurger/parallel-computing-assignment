@@ -119,6 +119,7 @@ class DStarMap {
     int CurrentCellRhs(const std::pair<int, int> &) const;
     Key CalculateCellKey(const std::pair<int, int> &) const;
     std::string CurrentCellStatus(const std::pair<int, int> &) const;
+    void clone_grid(std::vector<std::vector<DStarCell>> &);
 
     // set method
     void UpdateCellG(const std::pair<int, int> &, const int &);
@@ -135,6 +136,7 @@ class DStarMap {
     // print method
     void PrintValue();
     void PrintResult();
+    void PrintResult(std::vector<std::vector<DStarCell>> &tgrid);
 
  private:
     std::pair<int, int> start;
