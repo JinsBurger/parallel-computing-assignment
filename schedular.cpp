@@ -776,8 +776,9 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                     }
                     if(distRT[j][i] > robotPtr->get_energy())
                         distRT[j][i] = g_infinity_cost;
+                    
+                    j++;
                 }
-                j++;
             }
             i++;
         }
@@ -785,8 +786,9 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         assign_tasks_mcmf(distRT, distTT, robotPath);
 
         robot_task.clear();
-        for(int i=0; i<robots.size(); i++){
-            auto& robotPtr = robots[i];
+        i=0;
+        for(const auto& robotPtr : robots){
+            if(robotPtr->type == ROBOT::TYPE::DRONE) continue;
             for(int j=0; j<robotPath[i].size(); j++){
                 for(int k=0; k<RtoT[i][robotPath[i][j]].size(); k++){
                     if(robot_task.find(robotPtr->id)==robot_task.end()){
@@ -797,6 +799,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                     else robot_task[robotPtr->id].push(RtoT[i][robotPath[i][j]][k]);
                 }
             }
+            i++;
         }
         printf("robot_task created\n");
     }
