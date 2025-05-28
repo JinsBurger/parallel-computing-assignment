@@ -759,29 +759,31 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                 if(robotPtr->type == ROBOT::TYPE::CATERPILLAR || robotPtr->type == ROBOT::TYPE::WHEEL) {
                     //TODO: remain_progress, energy lack, if calculate_cost returns -1, means none of possible path found.
                     distRT[j][i] = task_dstar.calculate_cost(robotPtr->get_coord(), robotPtr->type, RtoT[j][i]);
-                    assert(distRT[j][i] != -1); // TODO: REMOVE IT AFTER DEALING WITH -1
 
-                    if(record_start.find(robotPtr->id) == record_start.end()){
-                        record_start[robotPtr->id] = 0;
-                    }
-                    if(robotPtr->get_status() == ROBOT::STATUS::MOVING && record_target_coord.find(robotPtr->id) != record_target_coord.end()){
-                        distRT[j][i] += max(0, map_manager.cost_at(record_target_coord[robotPtr->id], robotPtr->type)
-                                        - ROBOT::energy_per_tick_list[static_cast<size_t>(robotPtr->type)] * (map_manager.tick - record_start[robotPtr->id]));
-                    }
-                    if(robotPtr->get_status() == ROBOT::STATUS::WORKING){
-                        auto it = active_tasks.begin();
-                        for (; it != active_tasks.end(); ++it){
-                            if ((*it)->coord == robotPtr->get_coord() && !(*it)->is_done())
-                                break;
-                        }
-                        if(it != active_tasks.end()){
-                            distRT[j][i] += (*it)->get_cost(robotPtr->type)
-                                            - ROBOT::energy_per_tick_list[static_cast<size_t>(robotPtr->type)] * (map_manager.tick - record_start[robotPtr->id]);
-                        }
-                    }
-                    if(distRT[j][i] > robotPtr->get_energy())
+                    if(distRT[j][i] == -1) 
                         distRT[j][i] = g_infinity_cost;
-                    
+                    else{ 
+                        if(record_start.find(robotPtr->id) == record_start.end()){
+                            record_start[robotPtr->id] = 0;
+                        }
+                        if(robotPtr->get_status() == ROBOT::STATUS::MOVING && record_target_coord.find(robotPtr->id) != record_target_coord.end()){
+                            distRT[j][i] += max(0, map_manager.cost_at(record_target_coord[robotPtr->id], robotPtr->type)
+                                            - ROBOT::energy_per_tick_list[static_cast<size_t>(robotPtr->type)] * (map_manager.tick - record_start[robotPtr->id]));
+                        }
+                        if(robotPtr->get_status() == ROBOT::STATUS::WORKING){
+                            auto it = active_tasks.begin();
+                            for (; it != active_tasks.end(); ++it){
+                                if ((*it)->coord == robotPtr->get_coord() && !(*it)->is_done())
+                                    break;
+                            }
+                            if(it != active_tasks.end()){
+                                distRT[j][i] += (*it)->get_cost(robotPtr->type)
+                                                - ROBOT::energy_per_tick_list[static_cast<size_t>(robotPtr->type)] * (map_manager.tick - record_start[robotPtr->id]);
+                            }
+                        }
+                        if(distRT[j][i] > robotPtr->get_energy())
+                            distRT[j][i] = g_infinity_cost;
+                    }
                     j++;
                 }
             }
