@@ -198,4 +198,5 @@ public:
                               const vector<shared_ptr<ROBOT>> &robots,
                               const ROBOT &robot);
 };
+
 #endif SCHEDULER_H_

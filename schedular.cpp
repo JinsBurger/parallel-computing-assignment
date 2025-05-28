@@ -706,7 +706,9 @@ MapManager map_manager;
 //#define gravity_mode
 
 static map<int, vector<vector<int>>> last_seen_time;
-vector<queue<vector<Coord>>> robot_task;
+vector<queue<Coord>> robot_task;
+map<int,int> record_start;
+map<int,Coord> record_target_coord;
 
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const set<Coord> &updated_coords,
@@ -748,7 +750,28 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             j=0;
             for(const auto& robotPtr : robots){
                 if(robotPtr->type == ROBOT::TYPE::CATERPILLAR || robotPtr->type == ROBOT::TYPE::WHEEL) {
+                    //TODO: remain_progress, energy lack
                     distRT[j][i] = task.calculate_cost(robotPtr->get_coord(), robotPtr->type, RtoT[j][i]);
+                    if(record_start.find(robotPtr->id) == record_start.end()){
+                        record_start[robotPtr->id] = 0;
+                    }
+                    if(robotPtr->get_status() == ROBOT::STATUS::MOVING && record_target_coord.find(robotPtr->id) != record_target_coord.end()){
+                        distRT[j][i] += max(0, map_manager.cost_at(record_target_coord[robotPtr->id], robotPtr->type)
+                                        - ROBOT::energy_per_tick_list[static_cast<size_t>(robotPtr->type)] * (map_manager.tick - record_start[robotPtr->id]));
+                    }
+                    if(robotPtr->get_status() == ROBOT::STATUS::WORKING){
+                        auto it = active_tasks.begin();
+                        for (; it != active_tasks.end(); ++it){
+                            if ((*it)->coord == robotPtr->get_coord() && !(*it)->is_done())
+                                break;
+                        }
+                        if(it != active_tasks.end()){
+                            distRT[j][i] += (*it)->get_cost(robotPtr->type)
+                                            - ROBOT::energy_per_tick_list[static_cast<size_t>(robotPtr->type)] * (map_manager.tick - record_start[robotPtr->id]);
+                        }
+                    }
+                    if(distRT[j][i] > robotPtr->get_energy())
+                        distRT[j][i] = g_infinity_cost;
                 }
                 j++;
             }
@@ -761,7 +784,8 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         robot_task.resize(robots.size());
         for(int i=0; i<robots.size(); i++){
             for(int j=0; j<robotPath[i].size(); j++){
-                robot_task[i].push(RtoT[i][robotPath[i][j]]);
+                for(int k=0; k<RtoT[i][robotPath[i][j]].size(); k++)
+                    robot_task[i].push(RtoT[i][robotPath[i][j]][k]);
             }
         }
         printf("robot_task created\n");
@@ -789,7 +813,11 @@ bool Scheduler::on_task_reached(const set<Coord> &observed_coords,
                                 const ROBOT &robot,
                                 const TASK &task)
 {
-    return robot.type != ROBOT::TYPE::DRONE;
+    bool res = robot.type != ROBOT::TYPE::DRONE;
+    if(res){
+        record_start[robot.id] = map_manager.tick;
+    }
+    return res;
 }
 
 // 방향 벡터: 상, 하, 좌, 우
@@ -816,8 +844,23 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const vector<shared_ptr<ROBOT>> &robots,
                                      const ROBOT &robot)
 {
-    if (robot.type != ROBOT::TYPE::DRONE)
-        return static_cast<ROBOT::ACTION>(rand() % 5);
+    if (robot.type != ROBOT::TYPE::DRONE){
+        ROBOT::ACTION res = ROBOT::ACTION::HOLD;
+        if(!robot_task[robot.id].empty()){
+            for(int dir=0; dir<4; dir++){
+                if(robot.get_coord() + directions[dir] == robot_task[robot.id].front()){
+                    res = static_cast<ROBOT::ACTION>(dir);
+                    break;
+                }
+            }
+            robot_task[robot.id].pop();
+        }
+        if(res != ROBOT::ACTION::HOLD){
+            record_target_coord[robot.id] = robot.get_coord() + directions[static_cast<int>(res)];
+            record_start[robot.id] = map_manager.tick;
+        }
+        return res;
+    }
 
     int map_size = static_cast<int>(known_object_map.size());
     int id = robot.id;
