@@ -1,4 +1,5 @@
 from PIL import Image
+from moviepy.editor import VideoFileClip
 import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
@@ -180,6 +181,11 @@ class MAP_GIF:
     
     def save(self):
         self.frames[0].save(self.filename, save_all=True, append_images=self.frames[1:], duration=230, loop=0)
+        clip = VideoFileClip(self.filename)
+
+        # Write to MP4 (H.264 codec, recommended for compatibility)
+        clip.write_videofile(os.path.basename(self.filename)+".mp4", codec="libx264")
+
 
 def parse_map(lines):
     map = []
