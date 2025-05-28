@@ -618,7 +618,6 @@ class TaskDstarLite {
         dstars_map[ROBOT::TYPE::CATERPILLAR]->Initialize();
         dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_y, task_x));
         dstars_map[ROBOT::TYPE::WHEEL]->Initialize();
-        
         // Conduct path plannign
        update_all_walls();
        replanning();
@@ -634,9 +633,6 @@ class TaskDstarLite {
         uint32_t cost = 0;
         dstars_map[robot_type]->map.SetStart(robot_pos);
         dstars_map[robot_type]->ComputeShortestPath();
-
-        cout << "START: (" << robot_pos.first <<  " , " << robot_pos.second  << " ) " << endl;
-        dstars_map[robot_type]->map.PrintResult();
 
         #ifdef DSTAR_VERBOSE
         std::vector<std::vector<DStarCell>> new_grid;
@@ -671,7 +667,7 @@ class TaskDstarLite {
         if(mm.object_map[pos.second][pos.first] == OBJECT::WALL) {
             dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(pos);
             dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(pos);
-        } else if(mm.object_map[pos.second][pos.first] == OBJECT::EMPTY) {
+        } else  {
             dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus(pos, " ");
             dstars_map[ROBOT::TYPE::CATERPILLAR]->map.UpdateCellStatus(pos, " ");
             //Update vertices of newly observed movable coords, 
@@ -684,7 +680,8 @@ class TaskDstarLite {
         //     update_wall({v.y, v.x});
         for(int x=0; x < mm.observed_map.size(); x++){
             for(int y=0; y < mm.observed_map.size(); y++) {
-                update_object({y,x});
+                if(mm.observed_map[x][y] >= 0)
+                    update_object({y,x});
             }
         }
     }
@@ -750,12 +747,13 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         robotPath.resize(robots.size());
         //printf("resize done\n");
         int i=0, j=0;
-        for(auto& [task_id,task] : tasks_dstar){
+        for(auto task : active_tasks){
+            auto &task_dstar = tasks_dstar.at(task->id);
             j=0;
             for(const auto& robotPtr : robots){
                 if(robotPtr->type == ROBOT::TYPE::CATERPILLAR || robotPtr->type == ROBOT::TYPE::WHEEL) {
                     //TODO: remain_progress, energy lack
-                    distRT[j][i] = task.calculate_cost(robotPtr->get_coord(), robotPtr->type, RtoT[j][i]);
+                    distRT[j][i] = task_dstar.calculate_cost(robotPtr->get_coord(), robotPtr->type, RtoT[j][i]);
                     if(record_start.find(robotPtr->id) == record_start.end()){
                         record_start[robotPtr->id] = 0;
                     }
