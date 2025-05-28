@@ -746,10 +746,14 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         printf("mcmf part starts\n");
         vector<vector<int>> distRT, distTT, robotPath;
         vector<vector<vector<Coord>>> RtoT;
-        distRT = vector<vector<int>>(robots.size(), vector<int>(tasks_dstar.size()));
+        int cnt=0;
+        for(const auto& robotPtr : robots){
+            if(robotPtr->type != ROBOT::TYPE::DRONE) cnt++;
+        }
+        distRT = vector<vector<int>>(cnt, vector<int>(tasks_dstar.size()));
         distTT = vector<vector<int>>(tasks_dstar.size(), vector<int>(tasks_dstar.size()));
-        RtoT = vector<vector<vector<Coord>>>(robots.size(),vector<vector<Coord>>(tasks_dstar.size()));
-        robotPath.resize(robots.size());
+        RtoT = vector<vector<vector<Coord>>>(cnt,vector<vector<Coord>>(tasks_dstar.size()));
+        robotPath.resize(cnt);
         //printf("resize done\n");
         int i=0, j=0;
         for(auto task : active_tasks){

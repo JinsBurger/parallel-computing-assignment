@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
         parse_flag = 1;
     }
 
-    srand(1748416137);//static_cast<unsigned int>(time(NULL)));
+    srand(static_cast<unsigned int>(time(NULL)));
 
     TIMER timer;
     MAP map(MAP_SIZE, NUM_ROBOT, NUM_INITIAL_TASKS, NUM_MAX_TASKS, WALL_DENSITY, ROBOT_ENERGY);
