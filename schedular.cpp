@@ -1091,6 +1091,7 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
 {
     const int R = static_cast<int>(distRT.size());
     const int T = distRT.empty() ? 0 : (int)distRT[0].size();
+    const int MAX_TASK_PER_ROBOT = 2;
 
     printf("R=%d T=%d\n",R,T);
     if (R == 0 || T == 0) return;              // 예외 처리
@@ -1100,51 +1101,26 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
     const int SRC       = 0;
     const int ROBOT_BEG = 1;                   // R 개 (0‑based offset)
     const int TASK_BEG  = ROBOT_BEG + R;       // T*T 개 (flattened layers)
-    const int ID_BEG    = TASK_BEG + T * T;    // T 개 (task 번호 노드)
-    const int SINK      = ID_BEG + T;
+    const int SINK      = TASK_BEG + T;
     const int NODES     = SINK + 1;
 
     MCMF mcmf(NODES);
 
     //  source → robot (cap=1, cost=0)
     for (int r = 0; r < R; ++r)
-        mcmf.addEdge(SRC, ROBOT_BEG + r, T, 0);
+        mcmf.addEdge(SRC, ROBOT_BEG + r, MAX_TASK_PER_ROBOT, 0);
 
-    //  robot → 첫 task layer (cap=T, cost=dist)
+    //  robot → task layer (cap=1, cost=dist)
     for (int r = 0; r < R; ++r){
         for (int t = 0; t < T; ++t){
-            mcmf.addEdge(ROBOT_BEG + r,
-                         TASK_BEG + /*layer0*/ t,
-                         T,
-                         distRT[r][t]);
-            //printf("add %d %d %d %d\n",ROBOT_BEG + r,TASK_BEG + /*layer0*/ t,T,distRT[r][t]);
+            mcmf.addEdge(ROBOT_BEG + r, TASK_BEG + t, 1, distRT[r][t]);
         }
     }
 
-    //  task layer k → k+1 (cap=T‑(k+1), cost=distTT)
-    for (int k = 0; k < T - 1; ++k) {
-        int capHere = T - (k + 1);             // 3,2,1,…
-        int fromBeg = TASK_BEG + k * T;
-        int toBeg   = TASK_BEG + (k + 1) * T;
-
-        for (int i = 0; i < T; ++i) //TODO: Mismatch the size of distTT
-            for (int j = 0; j < T; ++j)
-                mcmf.addEdge(fromBeg + i,
-                             toBeg   + j,
-                             capHere,
-                             distTT[i][j]);
-    }
-
-
-    //  마지막 task layer → ID (cap=1, cost=0)
-    int lastBeg = TASK_BEG + (T - 1) * T;
+    //  task layer → sink (cap=1, cost=0)
     for (int t = 0; t < T; ++t)
-        mcmf.addEdge(lastBeg + t, ID_BEG + t, 1, 0);
-
-    //  ID → sink (cap=1, cost=0)
-    for (int t = 0; t < T; ++t)
-        mcmf.addEdge(ID_BEG + t, SINK, 1, 0);
-    
+        mcmf.addEdge(TASK_BEG + t, SINK, 1, 0);
+ 
 /*    printf("before MCMF:\n");
     for(int i=0; i<mcmf.G.size(); i++){
         for(int j=0; j<mcmf.G[i].size(); j++){
@@ -1172,30 +1148,15 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
         }
     }
 */
-    //TODO: 수정
+    
     for (int r = 0; r < R; ++r) {
-        //printf("%d\n",r);
         int node = ROBOT_BEG + r;                 // 로봇 노드부터 시작
-        while (true) {
-            //printf("node: %d\n",node);
-            bool advanced = false;
-            for (const Edge& e : G[node]) {
-                // forward 간선으로 실제 flow가 흘렀다면 역간선 cap > 0
-                if(e.to < node) continue;
-                if (G[e.to][e.rev].cap > 0) {
-                    //printf("seeing %d %d %d %d\n",e.to,G[e.to][e.rev].to,G[e.to][e.rev].cap);
-                    // 다음 노드가 task-layer 라인인가?
-                    if (e.to >= TASK_BEG && e.to < TASK_BEG + T * T) {
-                        int taskIdx = (e.to - TASK_BEG) % T;     // 0 ~ T-1
-                        robotPath[r].push_back(taskIdx);
-                    }
-                    node     = e.to;
-                    advanced = true;
-                    break;
-                }
+        for (const Edge& e : G[node]) {
+            if(e.to < node) continue;
+            if (G[e.to][e.rev].cap > 0) {
+                int taskIdx = (e.to - TASK_BEG) % T;     // 0 ~ T-1
+                robotPath[r].push_back(taskIdx);
             }
-            // ID-노드(→ SINK)까지 오면 종료
-            if (!advanced || (node >= ID_BEG && node < ID_BEG + T)) break;
         }
     }
 
