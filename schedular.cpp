@@ -619,7 +619,7 @@ class TaskDstarLite {
         dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_y, task_x));
         dstars_map[ROBOT::TYPE::WHEEL]->Initialize();
         // Conduct path plannign
-       update_all_walls();
+       load_maps();
        replanning();
     }
     
@@ -675,7 +675,7 @@ class TaskDstarLite {
             dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateVertex(pos);
         }
     }
-    void update_all_walls() {
+    void load_maps() {
         // for(Coord v : mm.objects[OBJECT::WALL])
         //     update_wall({v.y, v.x});
         for(int x=0; x < mm.observed_map.size(); x++){
