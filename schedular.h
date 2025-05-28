@@ -90,6 +90,7 @@ class DStarOpenList {
     std::pair<Key, std::pair<int, int>> Top() const;
     std::pair<Key, std::pair<int, int>> Pop();
     bool Find(const std::pair<int, int> &) const;
+    bool Empty() const;
  private:
     std::vector<std::tuple<Key, int, int>> priority_queue;
 };

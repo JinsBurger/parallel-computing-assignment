@@ -48,7 +48,6 @@ int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     if(cost == INFINITE) {
         cost = g_infinity_cost;
     } else if (cost < 0) {
-        // TODO: if cost < 0 (= uncertain cells yet ),  returns the average of the costs of the "movable" cells.
         cost = avg_costs[type] / certain_coordN;
     }
     return cost;
@@ -169,6 +168,11 @@ std::pair<Key, std::pair<int, int>> DStarOpenList::Top() const {
     auto position = std::make_pair(std::get<1>(priority_queue.front()),
                                    std::get<2>(priority_queue.front()));
     return std::make_pair(key, position);
+}
+
+
+bool DStarOpenList::Empty() const {
+    return priority_queue.empty();
 }
 
 /**
@@ -381,7 +385,7 @@ std::vector<std::pair<int, int>> DStarMap::FindNeighbors(
         auto neighbor = std::make_pair(position.first + i.first,
                                         position.second + i.second);
         auto cost = ComputeCost(position, neighbor);
-        if (cost < g_infinity_cost) // TODO
+        if (cost < g_infinity_cost)
             neighbors.push_back(neighbor);
     }
     return neighbors;
@@ -487,10 +491,8 @@ class DStarImpl {
     void ComputeShortestPath() {
         pair<int, int> robot_pos = this->map.GetStart();
         //this->map.PrintResult();
-        //this->map.PrintValue();
 
-        //TODO: If this->openlist is empty, invalid heap-read occurs.
-        while (this->openlist.Top().first <
+        while (!this->openlist.Empty() && this->openlist.Top().first <
             this->map.CalculateCellKey(robot_pos) ||
             this->map.CurrentCellRhs(robot_pos) !=
             this->map.CurrentCellG(robot_pos)) {
@@ -628,7 +630,6 @@ class TaskDstarLite {
     }
 
     int calculate_cost(Coord pos, ROBOT::TYPE robot_type, vector<Coord> &path) {
-        //TODO: Calculate costs of each ROBOT::Type(CATERPILLAR, WHEEL), Local update only on the updated_walls
         pair<int, int> robot_pos = {pos.y, pos.x};
         uint32_t cost = 0;
         dstars_map[robot_type]->map.SetStart(robot_pos);
