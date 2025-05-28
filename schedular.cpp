@@ -6,6 +6,7 @@
 #include <vector>
 #include <queue>
 #include <limits>
+#include <assert.h>
 
 
 using namespace std;
@@ -490,13 +491,11 @@ class DStarImpl {
      */
     void ComputeShortestPath() {
         pair<int, int> robot_pos = this->map.GetStart();
-        //this->map.PrintResult();
 
-        while (!this->openlist.Empty() && this->openlist.Top().first <
+        while (!this->openlist.Empty() && (this->openlist.Top().first <
             this->map.CalculateCellKey(robot_pos) ||
             this->map.CurrentCellRhs(robot_pos) !=
-            this->map.CurrentCellG(robot_pos)) {
-
+            this->map.CurrentCellG(robot_pos))) {
             auto key_and_node = this->openlist.Pop();
             auto node = key_and_node.second;
 
@@ -581,15 +580,19 @@ class DStarImpl {
         return next_position;
     }
 
+    void UpdateCellAndNeighbors(std::pair<int, int> pos) {
+        UpdateVertex(pos);
+
+        for (auto const &candidate_neighbor :
+                            this->map.FindNeighbors(pos)) {
+            UpdateVertex(candidate_neighbor);
+        }
+    }
+
     void AddObstacle(std::pair<int, int> obstacle_pos) {
         this->map.AddObstacle(obstacle_pos);
         // Update node's status
-        UpdateVertex(obstacle_pos);
-
-        for (auto const &candidate_neighbor :
-                            this->map.FindNeighbors(obstacle_pos)) {
-            UpdateVertex(candidate_neighbor);
-        }
+        UpdateCellAndNeighbors(obstacle_pos);
         this->map.UpdateCellRhs(obstacle_pos, g_infinity_cost);
         this->map.UpdateCellG(obstacle_pos, g_infinity_cost);
     }
@@ -633,6 +636,8 @@ class TaskDstarLite {
         uint32_t cost = 0;
         dstars_map[robot_type]->map.SetStart(robot_pos);
         dstars_map[robot_type]->ComputeShortestPath();
+        if(dstars_map[robot_type]->map.CurrentCellG(robot_pos) >= g_infinity_cost)
+            return -1;
 
         #ifdef DSTAR_VERBOSE
         std::vector<std::vector<DStarCell>> new_grid;
@@ -671,8 +676,8 @@ class TaskDstarLite {
             dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus(pos, " ");
             dstars_map[ROBOT::TYPE::CATERPILLAR]->map.UpdateCellStatus(pos, " ");
             //Update vertices of newly observed movable coords, 
-            dstars_map[ROBOT::TYPE::WHEEL]->UpdateVertex(pos);
-            dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateVertex(pos);
+            dstars_map[ROBOT::TYPE::WHEEL]->UpdateCellAndNeighbors(pos);
+            dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateCellAndNeighbors(pos);
         }
     }
     void load_maps() {
@@ -752,8 +757,10 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             j=0;
             for(const auto& robotPtr : robots){
                 if(robotPtr->type == ROBOT::TYPE::CATERPILLAR || robotPtr->type == ROBOT::TYPE::WHEEL) {
-                    //TODO: remain_progress, energy lack
+                    //TODO: remain_progress, energy lack, if calculate_cost returns -1, means none of possible path found.
                     distRT[j][i] = task_dstar.calculate_cost(robotPtr->get_coord(), robotPtr->type, RtoT[j][i]);
+                    assert(distRT[j][i] != -1); // TODO: REMOVE IT AFTER DEALING WITH -1
+
                     if(record_start.find(robotPtr->id) == record_start.end()){
                         record_start[robotPtr->id] = 0;
                     }
