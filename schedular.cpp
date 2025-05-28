@@ -635,6 +635,9 @@ class TaskDstarLite {
         dstars_map[robot_type]->map.SetStart(robot_pos);
         dstars_map[robot_type]->ComputeShortestPath();
 
+        cout << "START: (" << robot_pos.first <<  " , " << robot_pos.second  << " ) " << endl;
+        dstars_map[robot_type]->map.PrintResult();
+
         #ifdef DSTAR_VERBOSE
         std::vector<std::vector<DStarCell>> new_grid;
         dstars_map[robot_type]->map.clone_grid(new_grid);
@@ -707,7 +710,7 @@ MapManager map_manager;
 //#define gravity_mode
 
 static map<int, vector<vector<int>>> last_seen_time;
-vector<queue<Coord>> robot_task;
+map<int,queue<Coord>> robot_task;
 map<int,int> record_start;
 map<int,Coord> record_target_coord;
 
@@ -782,11 +785,17 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         assign_tasks_mcmf(distRT, distTT, robotPath);
 
         robot_task.clear();
-        robot_task.resize(robots.size());
         for(int i=0; i<robots.size(); i++){
+            auto& robotPtr = robots[i];
             for(int j=0; j<robotPath[i].size(); j++){
-                for(int k=0; k<RtoT[i][robotPath[i][j]].size(); k++)
-                    robot_task[i].push(RtoT[i][robotPath[i][j]][k]);
+                for(int k=0; k<RtoT[i][robotPath[i][j]].size(); k++){
+                    if(robot_task.find(robotPtr->id)==robot_task.end()){
+                        queue<Coord> tmp;
+                        tmp.push(RtoT[i][robotPath[i][j]][k]);
+                        robot_task[robotPtr->id] = tmp;
+                    }
+                    else robot_task[robotPtr->id].push(RtoT[i][robotPath[i][j]][k]);
+                }
             }
         }
         printf("robot_task created\n");
@@ -847,7 +856,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
 {
     if (robot.type != ROBOT::TYPE::DRONE){
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
-        if(!robot_task[robot.id].empty()){
+        if(robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()){
             for(int dir=0; dir<4; dir++){
                 if(robot.get_coord() + directions[dir] == robot_task[robot.id].front()){
                     res = static_cast<ROBOT::ACTION>(dir);
