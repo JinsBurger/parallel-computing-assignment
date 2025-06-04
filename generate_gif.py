@@ -82,7 +82,8 @@ class MAP_GIF:
             "WALL": 100,
             "OBSERVED": 100,
             "TRACE": 101,
-            "TEXT": 102
+            "ROBOT_LINE": 103,
+            "TEXT": 104,
         }
 
         # 어두운 색상 리스트
@@ -95,7 +96,16 @@ class MAP_GIF:
             self.traces[t] = color
             color_names.remove(color)
 
-    def add_object_map(self, tick, map, observed_cnt, task_info):
+    def get_direction_type(self, last_pos, next_pos):
+        # y, x
+        if last_pos[0] == next_pos[0]:
+            return "HOR"
+        elif last_pos[1] == next_pos[1]:
+            return "VER"
+        else:
+            return "ERR"
+
+    def add_object_map(self, tick, map, observed_cnt, task_info, latest_robot_path):
         print(f"TICK: {tick}")
       
 
@@ -113,13 +123,21 @@ class MAP_GIF:
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         ax.tick_params(left=False, bottom=False)
+
+        robots = {}
         
         # 격자 안에 문자 표시 (공백은 빈칸)
         for (i, j), obj in np.ndenumerate(state):
             obj_name = obj
             if len(obj_name) > 0 and obj_name[0] == "@":
                 obj_name = obj_name[1:]
-
+                
+            r_name = re.match(r'[A-Za-z]{1,100}', obj_name)
+            if r_name:
+              r_name = r_name[0]
+              if r_name not in ["T", "WAL"]:
+                r_id = obj_name[len(r_name):]
+                robots[int(r_id)] = [j,i]
             if obj_name in self.traces.keys():
                 self.trace_map[j][i] = obj_name
 
@@ -158,13 +176,27 @@ class MAP_GIF:
                         ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', alpha=0.3, zorder=self.zorder["OBSERVED"]))
                 ax.text(j, i, obj_name, ha='center', va='center', fontsize=3, family='monospace', zorder=self.zorder["TEXT"])
 
+        ax.set_ylim(self.map_size - 0.5, -0.5)
+        ax.set_xlim(-0.5, self.map_size - 0.5)
 
-            
-            
-        
+
+        ## Print robot path
+        for r_id in latest_robot_path:
+          path = latest_robot_path[r_id]
+          
+          for (y1, x1), (y2, x2) in zip(path, path[1:]):
+              real_y1 = self.map_size - y1 - 1
+              real_y2 = self.map_size - y2 - 1
+
+              if y1 == y2 or x1 == x2:
+                ax.plot([x1, x2], [real_y1, real_y2], color='green', linewidth=1,  zorder=self.zorder["ROBOT_LINE"])  # straight
+              else:        
+                  ax.plot([x1, x2], [real_y1, real_y1], color='green', linewidth=1, zorder=self.zorder["ROBOT_LINE"])
+                  ax.plot([x2, x2], [real_y1, real_y2], color='green', linewidth=1, zorder=self.zorder["ROBOT_LINE"])
+              
         plt.tight_layout(pad=0)
         
-        # 이미지로 저장
+        # Save as GIF and Video
         plt.subplots_adjust(bottom=0.3)
         fig.text(0.5, 0.2, f"Tick: {tick}", ha='center', fontsize=12)
         fig.text(0.5, 0.15, f"Observed: {observed_cnt} / {real_width}x{real_width} (%.2f%%)"%((observed_cnt/real_width**2)*100), ha='center', fontsize=7)
@@ -230,13 +262,18 @@ def parse_task(lines):
 if __name__ == '__main__':
     os.system(f"./MRTA parse > {MRTA_LOG_PATH}")
 
-    map_gif = MAP_GIF("./rd0_230.gif", 30, traces=['RD0', 'RD3'])
+    MAP_SIZE = 40
+    map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, traces=['RD0', 'RD3'])
+
     with open(MRTA_LOG_PATH, "r") as f:
         map_flag = False
         map_lines = []
         task_flag = False
         task_lines = []
         latest_task_info = {}
+        latest_robot_path = {}
+        robot_path_flag = False
+
 
         tick = 0
         for l in f.read().splitlines():        
@@ -246,7 +283,6 @@ if __name__ == '__main__':
             elif l.startswith("End Task Info"):
                 latest_task_info = parse_task(task_lines)
                 task_flag = False
-                task_lines = []
 
             elif task_flag:
                 task_lines.append(l)
@@ -258,10 +294,27 @@ if __name__ == '__main__':
             elif l.startswith("End Object map"):
                 observed_cnt = int(l[len("End Object map: "):])
                 map_flag = False
-                map_gif.add_object_map(tick, parse_map(map_lines), observed_cnt, latest_task_info)
-                # map_gif.save()
-                # break
+                map_gif.add_object_map(tick, parse_map(map_lines), observed_cnt, latest_task_info, latest_robot_path)
+                
+                # if(len(latest_robot_path) > 0):
+                #     map_gif.save()
+                #     exit(-1)
+                
                 map_lines = []
+                latest_robot_path = {}
+                task_lines = []
+              
+            elif l.startswith("Robot Path Info"):
+                robot_path_flag = True
+
+            elif l.startswith("End Path Info"):
+                robot_path_flag = False
+              
+            elif robot_path_flag:
+                r_id, path = l.split(":")
+                path = [list(map(int, c.strip()[1:-1].split(","))) for c in path.strip().split("|")[:-1]]
+                if len(path) > 0:
+                  latest_robot_path[int(r_id)] = path
 
             elif map_flag:
                 if len(l) > 0 and not (l.startswith("0-") or l.startswith("  ")):

@@ -3,7 +3,7 @@
 
 int main(int argc, char *argv[])
 {
-    constexpr int MAP_SIZE = 30;
+    constexpr int MAP_SIZE = 20;
     constexpr int NUM_ROBOT = 6;
     constexpr int NUM_MAX_TASKS = 16;
     constexpr int NUM_INITIAL_TASKS = NUM_MAX_TASKS / 2;
@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
     }
 
     srand(static_cast<unsigned int>(time(NULL)));
+    // srand(0);
 
     TIMER timer;
     MAP map(MAP_SIZE, NUM_ROBOT, NUM_INITIAL_TASKS, NUM_MAX_TASKS, WALL_DENSITY, ROBOT_ENERGY);
@@ -43,9 +44,7 @@ int main(int argc, char *argv[])
         observed_coords = map.observed_coord_by_robot();
         updated_coords = map.update_coords(observed_coords);
 
-        if(parse_flag) {
-            map.print_object_map_if_changed(time);
-        }
+        
 #ifdef VERBOSE
         cout << "Time : " << time << endl;
         map.print_object_map();
@@ -60,6 +59,10 @@ int main(int argc, char *argv[])
                                   known_object_map,
                                   active_tasks,
                                   robots);
+
+         if(parse_flag) {
+            map.print_object_map_if_changed(time);
+        }
         timer.stop();
         for (auto robot : robots)
         {
