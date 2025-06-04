@@ -715,6 +715,7 @@ static map<int, vector<vector<int>>> last_seen_time;
 map<int,queue<Coord>> robot_task;
 map<int,int> record_start;
 map<int,Coord> record_target_coord;
+int last_task_reach_tick = -1;
 
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const set<Coord> &updated_coords,
@@ -741,7 +742,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
 
     
     
-    if(is_replanning_needed && active_tasks.size()>0){
+    if(last_task_reach_tick == (map_manager.tick-1) || (is_replanning_needed && active_tasks.size()>0)){
     //TODO: MCMF
         printf("mcmf part starts\n");
         vector<vector<int>> distRT, distTT, robotPath;
@@ -796,6 +797,14 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         printf("call assign_tasks_mcmf\n");
         assign_tasks_mcmf(distRT, distTT, robotPath);
 
+        for(int i=0; i<cnt; i++){
+            if(robotPath[i].size()==2){
+                if(distRT[i][robotPath[i][0]] > distRT[i][robotPath[i][1]]){
+                    swap(robotPath[i][0], robotPath[i][1]);
+                }
+            }
+        }
+
         robot_task.clear();
         i=0;
         for(const auto& robotPtr : robots){
@@ -839,7 +848,7 @@ bool Scheduler::on_task_reached(const set<Coord> &observed_coords,
 {
     bool res = robot.type != ROBOT::TYPE::DRONE;
     if(res){
-        record_start[robot.id] = map_manager.tick;
+        record_start[robot.id] = last_task_reach_tick = map_manager.tick;
     }
     return res;
 }
