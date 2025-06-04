@@ -1,4 +1,5 @@
 #include "simulator.h"
+#include <map>
 
 // 실체(정의) — 초기값은 이미 헤더에서 줬으므로 다시 쓰지 않습니다.
 constexpr int         ROBOT::view_range_list[];
@@ -207,14 +208,45 @@ void MAP::print_cost_map(ROBOT::TYPE type) const
 int observed_cnt;
 void MAP::print_object_map_if_changed(int tick) {
     if(is_object_map_changed) {
+        cout << "Start Task Info" << endl;
+        print_task_summary();
+        cout << "End Task Info" << endl;
+
+        cout << "Robot Path Info: " << endl;
+        print_all_robot_path();
+        cout << "End Path Info: " << endl;
+        
         observed_cnt = 0;
         cout << "Start Object map: " << tick << endl;
         print_object_map();
         is_object_map_changed = 0;
         cout << "End Object map: " << observed_cnt << endl;
-        cout << "Start Task Info" << endl;
-        print_task_summary();
-        cout << "End Task Info" << endl;
+        
+    }
+}
+
+
+extern map<int,queue<Coord>> robot_task;
+
+template <typename T>
+std::vector<T> queueToVector(std::queue<T> q) {
+    std::vector<T> result;
+    while (!q.empty()) {
+        result.push_back(q.front());
+        q.pop();
+    }
+    return result;
+}
+
+void MAP::print_all_robot_path() {
+    for(auto r : robots) {
+        if(robot_task.find(r->id) != robot_task.end()) {
+            cout << r->id << ": ";
+            for(auto path : queueToVector(robot_task[r->id])) {
+                cout << "(" << path.y  << ", " << path.x << ") | ";
+            }
+            cout << endl;
+        }
     }
 }
 

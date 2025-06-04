@@ -335,6 +335,7 @@ public:
     int get_cost(const Coord &coord, ROBOT::TYPE type) const { return known_cost_at(coord, type); }
     int get_robot_num_at(int x, int y) const { return robot_num_map[x][y]; }
     int get_robot_num_at(const Coord &coord) const { return robot_num_map[coord.x][coord.y]; }
+    void print_all_robot_path();
 
     // Public method for Robot
     weak_ptr<ROBOT> create_robot(ROBOT::TYPE type, int robot_energy)
