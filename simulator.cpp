@@ -1,5 +1,6 @@
 #include "simulator.h"
 #include <map>
+#include <queue>
 
 // 실체(정의) — 초기값은 이미 헤더에서 줬으므로 다시 쓰지 않습니다.
 constexpr int         ROBOT::view_range_list[];
