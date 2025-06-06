@@ -34,6 +34,7 @@ int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector
             if(object_map[coord.x][coord.y] != OBJECT::WALL) {
                 avg_costs[ROBOT::TYPE::WHEEL] += cost_map[coord.x][coord.y][static_cast<int>(ROBOT::TYPE::WHEEL)];
                 avg_costs[ROBOT::TYPE::CATERPILLAR] += cost_map[coord.x][coord.y][static_cast<int>(ROBOT::TYPE::CATERPILLAR)];
+                avg_costs[ROBOT::TYPE::DRONE] += cost_map[coord.x][coord.y][static_cast<int>(ROBOT::TYPE::DRONE)];
                 certain_coordN += 1;
             }
         }
@@ -609,18 +610,27 @@ class DStarImpl {
  * @return if there are hidden obstacle around
  */
 
-
 class TaskDstarLite {
+
+    #define RUN_All_Types(code) do { \
+        ROBOT::TYPE _type = ROBOT::TYPE::CATERPILLAR; \
+        code \
+        _type = ROBOT::TYPE::WHEEL; \
+        code \
+        _type = ROBOT::TYPE::DRONE; \
+        code \
+    } while(0)
+
     public:
     TaskDstarLite(int x, int y, MapManager &mm): task_x(x), task_y(y), mm(mm) {
-        dstars_map[ROBOT::TYPE::CATERPILLAR] = make_unique<DStarImpl>(mm, ROBOT::TYPE::CATERPILLAR);
-        dstars_map[ROBOT::TYPE::WHEEL] = make_unique<DStarImpl>(mm, ROBOT::TYPE::WHEEL);
-
         // Set the task position and initialie DStar
-        dstars_map[ROBOT::TYPE::CATERPILLAR]->map.SetGoal(make_pair(task_y, task_x));
-        dstars_map[ROBOT::TYPE::CATERPILLAR]->Initialize();
-        dstars_map[ROBOT::TYPE::WHEEL]->map.SetGoal(make_pair(task_y, task_x));
-        dstars_map[ROBOT::TYPE::WHEEL]->Initialize();
+        RUN_All_Types(
+            dstars_map[_type] = make_unique<DStarImpl>(mm, _type);
+            dstars_map[_type]->map.SetGoal(make_pair(task_y, task_x));
+            dstars_map[_type]->Initialize();
+        );
+
+
         // Conduct path plannign
        load_maps();
        replanning();
@@ -670,14 +680,16 @@ class TaskDstarLite {
     //pos = {y,x}
     void update_object(pair<int, int> pos) {
         if(mm.object_map[pos.second][pos.first] == OBJECT::WALL) {
-            dstars_map[ROBOT::TYPE::WHEEL]->AddObstacle(pos);
-            dstars_map[ROBOT::TYPE::CATERPILLAR]->AddObstacle(pos);
+            RUN_All_Types(
+                dstars_map[_type]->AddObstacle(pos);
+            );
         } else  {
-            dstars_map[ROBOT::TYPE::WHEEL]->map.UpdateCellStatus(pos, " ");
-            dstars_map[ROBOT::TYPE::CATERPILLAR]->map.UpdateCellStatus(pos, " ");
-            //Update vertices of newly observed movable coords, 
-            dstars_map[ROBOT::TYPE::WHEEL]->UpdateCellAndNeighbors(pos);
-            dstars_map[ROBOT::TYPE::CATERPILLAR]->UpdateCellAndNeighbors(pos);
+                RUN_All_Types(
+                dstars_map[_type]->map.UpdateCellStatus(pos, " ");
+                //Update vertices of newly observed movable coords, 
+                dstars_map[_type]->UpdateCellAndNeighbors(pos);
+
+            );
         }
     }
     void load_maps() {
@@ -712,7 +724,8 @@ MapManager map_manager;
 //#define gravity_mode
 
 static map<int, vector<vector<int>>> last_seen_time;
-map<int,queue<Coord>> robot_task;
+map<int, queue<Coord>> robot_task;
+map<int, vector<Coord>> drone_path;
 map<int,int> record_start;
 map<int,Coord> record_target_coord;
 int last_task_reach_tick = -1;
@@ -1092,6 +1105,8 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const vector<shared_ptr<ROBOT>> &robots,
                                      const ROBOT &robot)
 {
+
+    // WHEEL, CATERPILLAR
     if (robot.type != ROBOT::TYPE::DRONE) {
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
         if (robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()) {
@@ -1110,6 +1125,8 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         return res;
     }
 
+
+    // DRONE
     int map_size = static_cast<int>(known_object_map.size());
     int id = robot.id;
     Coord curr = robot.get_coord();
@@ -1210,8 +1227,14 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         }
     }
 
-    // TODO : 위에서 찾은 nearest_frontier로 이동 -> d*로 구현
     if (nearest_frontier.x != -1) {
+        // TODO: The path can be changed while the drone is moving, therefore the frontier path also has to be dealt with in on_info_updated.
+        TaskDstarLite tmp_dstar(nearest_frontier.x, nearest_frontier.y, map_manager);
+        vector<Coord> frontier_path;
+        tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);
+        drone_path[robot.id] =  frontier_path;
+
+        cout << "nearest_frontier(y,x): " << nearest_frontier.y << ", " << nearest_frontier.x << endl;
         int dx = nearest_frontier.x - curr.x;
         int dy = nearest_frontier.y - curr.y;
         int dir = -1;
