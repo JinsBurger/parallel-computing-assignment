@@ -853,6 +853,7 @@ bool Scheduler::on_task_reached(const set<Coord> &observed_coords,
     return res;
 }
 
+/*
 // 방향 벡터: 상, 하, 좌, 우
 static const Coord directions[4] = {
     {0, 1},  // UP
@@ -868,6 +869,11 @@ static map<int, stack<Coord>> drone_stack;
 static map<int, vector<vector<bool>>> visited;
 static map<int, bool> initialized;
 static map<int, ROBOT::ACTION> initial_direction;
+static map<int, set<Coord>> edge_visited;
+static map<int, bool> came_from_inner;
+static map<int, Coord> fallback_target;
+static map<int, int> fallback_steps;
+static map<int, ROBOT::ACTION> fallback_dir;
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const set<Coord> &updated_coords,
@@ -877,18 +883,18 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const vector<shared_ptr<ROBOT>> &robots,
                                      const ROBOT &robot)
 {
-    if (robot.type != ROBOT::TYPE::DRONE){
+    if (robot.type != ROBOT::TYPE::DRONE) {
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
-        if(robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()){
-            for(int dir=0; dir<4; dir++){
-                if(robot.get_coord() + directions[dir] == robot_task[robot.id].front()){
+        if (robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()) {
+            for (int dir = 0; dir < 4; dir++) {
+                if (robot.get_coord() + directions[dir] == robot_task[robot.id].front()) {
                     res = static_cast<ROBOT::ACTION>(dir);
                     break;
                 }
             }
             robot_task[robot.id].pop();
         }
-        if(res != ROBOT::ACTION::HOLD){
+        if (res != ROBOT::ACTION::HOLD) {
             record_target_coord[robot.id] = robot.get_coord() + directions[static_cast<int>(res)];
             record_start[robot.id] = map_manager.tick;
         }
@@ -913,12 +919,13 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         else
             initial_direction[id] = ROBOT::ACTION::DOWN;
 
+        fallback_steps[id] = 0;
+
         cout << "[Drone " << id << "] initial position: " << curr << ", direction set to " << initial_direction[id] << endl;
         return initial_direction[id];
     }
 
-    if (visited.count(id) == 0)
-    {
+    if (visited.count(id) == 0) {
         visited[id] = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
         drone_stack[id].push(curr);
         cout << "[Drone " << id << "] DFS initialized at " << curr << endl;
@@ -929,25 +936,21 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     vector<int> candidate_dir;
     vector<int> unexplored_count(4, 0);
 
-    for (int dir = 0; dir < 4; ++dir)
-    {
+    for (int dir = 0; dir < 4; ++dir) {
         Coord next = curr + directions[dir];
         if (next.x < 0 || next.x >= map_size || next.y < 0 || next.y >= map_size)
             continue;
         if (known_object_map[next.x][next.y] == OBJECT::WALL)
             continue;
-        if (!visited[id][next.x][next.y])
-        {
+        if (!visited[id][next.x][next.y]) {
             int cnt = 0;
-            for (int i = -2; i <= 2; ++i)
-            {
-                for (int j = 3; j <= 4; ++j) // 기존 1~2 → 3~4로 수정
-                {
+            for (int i = -2; i <= 2; ++i) {
+                for (int j = 3; j <= 5; ++j) {
                     Coord check;
-                    if (dir == 0)       check = {curr.x + i, curr.y + j}; // UP
-                    else if (dir == 1)  check = {curr.x + i, curr.y - j}; // DOWN
-                    else if (dir == 2)  check = {curr.x - j, curr.y + i}; // LEFT
-                    else                check = {curr.x + j, curr.y + i}; // RIGHT
+                    if (dir == 0)       check = {curr.x + i, curr.y + j};
+                    else if (dir == 1)  check = {curr.x + i, curr.y - j};
+                    else if (dir == 2)  check = {curr.x - j, curr.y + i};
+                    else                check = {curr.x + j, curr.y + i};
 
                     if (check.x < 0 || check.x >= map_size || check.y < 0 || check.y >= map_size)
                         continue;
@@ -957,16 +960,14 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                 }
             }
 
-            if (cnt > 0)
-            {
+            if (cnt > 0) {
                 candidate_dir.push_back(dir);
                 unexplored_count[dir] = cnt;
             }
         }
     }
 
-    if (!candidate_dir.empty())
-    {
+    if (!candidate_dir.empty()) {
         int best_dir = candidate_dir[0];
         for (int dir : candidate_dir)
             if (unexplored_count[dir] > unexplored_count[best_dir])
@@ -977,92 +978,257 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             if (unexplored_count[dir] == unexplored_count[best_dir])
                 best_candidates.push_back(dir);
 
-        if (best_candidates.size() > 1)
-            best_dir = best_candidates[rand() % best_candidates.size()];
+        // 다른 드론의 방향과 비교하여 우선순위 조정
+        if (robots.size() >= 2) {
+            Coord other = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
+            int dx = other.x - curr.x;
+            int dy = other.y - curr.y;
+
+            int toward = 0;
+            if (abs(dx) > abs(dy)) toward = (dx > 0) ? 3 : 2; // RIGHT or LEFT
+            else toward = (dy > 0) ? 0 : 1;                    // UP or DOWN
+
+            int avoid = opposite[toward];
+
+            for (int cand : best_candidates) {
+                if (cand == avoid) {
+                    best_dir = cand;
+                    break;
+                }
+            }
+            if (best_dir == toward && best_candidates.size() > 1) {
+                for (int cand : best_candidates) {
+                    if (cand != toward && cand != avoid) {
+                        best_dir = cand;
+                        break;
+                    }
+                }
+            }
+        }
 
         Coord next = curr + directions[best_dir];
         drone_stack[id].push(curr);
         cout << "[Drone " << id << "] Move from " << curr << " to " << next << " (dir=" << best_dir << ")" << endl;
+        fallback_steps[id] = 0;
         return static_cast<ROBOT::ACTION>(best_dir);
     }
-    else
-    {
-        if (!drone_stack[id].empty())
-        {
-            Coord parent = drone_stack[id].top();
-            drone_stack[id].pop();
 
-            for (int dir = 0; dir < 4; ++dir)
-            {
-                if (curr + directions[dir] == parent)
-                {
-                    cout << "[Drone " << id << "] Backtrack from " << curr << " to " << parent << " (dir=" << dir << ")" << endl;
-                    return static_cast<ROBOT::ACTION>(dir);
+    if (!drone_stack[id].empty()) {
+        Coord parent = drone_stack[id].top();
+        drone_stack[id].pop();
+
+        for (int dir = 0; dir < 4; ++dir) {
+            if (curr + directions[dir] == parent) {
+                cout << "[Drone " << id << "] Backtrack from " << curr << " to " << parent << " (dir=" << dir << ")" << endl;
+                fallback_steps[id] = 0;
+                return static_cast<ROBOT::ACTION>(dir);
+            }
+        }
+    }
+
+    if (fallback_steps[id] > 0) {
+        Coord next = curr + directions[static_cast<int>(fallback_dir[id])];
+        if (next.x >= 0 && next.x < map_size && next.y >= 0 && next.y < map_size &&
+            known_object_map[next.x][next.y] != OBJECT::WALL) {
+            fallback_steps[id]--;
+            cout << "[Drone " << id << "] Continuing fallback in dir=" << static_cast<int>(fallback_dir[id]) << " → remaining: " << fallback_steps[id] << endl;
+            return fallback_dir[id];
+        }
+    }
+
+    vector<int> fallback_candidates;
+    for (int dir = 0; dir < 4; ++dir) {
+        Coord next = curr + directions[dir];
+        if (next.x >= 0 && next.x < map_size && next.y >= 0 && next.y < map_size &&
+            known_object_map[next.x][next.y] != OBJECT::WALL && static_cast<int>(fallback_dir[id]) != dir) {
+            fallback_candidates.push_back(dir);
+        }
+    }
+    if (!fallback_candidates.empty()) {
+        int new_dir = fallback_candidates[rand() % fallback_candidates.size()];
+        fallback_steps[id] = 2;
+        fallback_dir[id] = static_cast<ROBOT::ACTION>(new_dir);
+        cout << "[Drone " << id << "] New fallback (non-repeating) initialized → dir=" << new_dir << endl;
+        return static_cast<ROBOT::ACTION>(new_dir);
+    }
+
+    return ROBOT::ACTION::HOLD;
+}
+*/
+
+// 방향 벡터: 상, 하, 좌, 우
+static const Coord directions[4] = {
+    {0, 1},  // UP
+    {0, -1}, // DOWN
+    {-1, 0}, // LEFT
+    {1, 0}   // RIGHT
+};
+
+static map<int, stack<Coord>> drone_stack;
+static map<int, vector<vector<bool>>> visited;
+static map<int, bool> initialized;
+
+// Helper: Check if coord is inside map bounds
+bool is_valid_coord(const Coord& c, int map_size) {
+    return c.x >= 0 && c.x < map_size && c.y >= 0 && c.y < map_size;
+}
+
+// Helper: Check if cell is frontier (visited and has unknown neighbor)
+bool is_frontier(const Coord& c, const vector<vector<OBJECT>>& map, int map_size) {
+    if (map[c.x][c.y] == OBJECT::WALL) return false;
+    for (int dir = 0; dir < 4; ++dir) {
+        Coord adj = c + directions[dir];
+        if (is_valid_coord(adj, map_size) && map[adj.x][adj.y] == OBJECT::UNKNOWN)
+            return true;
+    }
+    return false;
+}
+
+ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
+                                     const set<Coord> &updated_coords,
+                                     const vector<vector<vector<int>>> &known_cost_map,
+                                     const vector<vector<OBJECT>> &known_object_map,
+                                     const vector<shared_ptr<TASK>> &active_tasks,
+                                     const vector<shared_ptr<ROBOT>> &robots,
+                                     const ROBOT &robot)
+{
+    if (robot.type != ROBOT::TYPE::DRONE) {
+        ROBOT::ACTION res = ROBOT::ACTION::HOLD;
+        if (robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()) {
+            for (int dir = 0; dir < 4; dir++) {
+                if (robot.get_coord() + directions[dir] == robot_task[robot.id].front()) {
+                    res = static_cast<ROBOT::ACTION>(dir);
+                    break;
+                }
+            }
+            robot_task[robot.id].pop();
+        }
+        if (res != ROBOT::ACTION::HOLD) {
+            record_target_coord[robot.id] = robot.get_coord() + directions[static_cast<int>(res)];
+            record_start[robot.id] = map_manager.tick;
+        }
+        return res;
+    }
+
+    int map_size = static_cast<int>(known_object_map.size());
+    int id = robot.id;
+    Coord curr = robot.get_coord();
+
+    if (!initialized[id]) {
+        initialized[id] = true;
+        visited[id] = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
+        drone_stack[id].push(curr);
+        cout << "[Drone " << id << "] Initialized at " << curr << endl;
+    }
+
+    visited[id][curr.x][curr.y] = true;
+
+    vector<int> candidate_dir;
+    vector<int> unexplored_count(4, 0);
+
+    for (int dir = 0; dir < 4; ++dir) {
+        Coord next = curr + directions[dir];
+        if (!is_valid_coord(next, map_size)) continue;
+        if (known_object_map[next.x][next.y] == OBJECT::WALL) continue;
+        if (!visited[id][next.x][next.y]) {
+            int cnt = 0;
+            for (int i = -2; i <= 2; ++i) {
+                for (int j = 3; j <= 4; ++j) {
+                    Coord check = next;
+                    if (dir == 0) check = {next.x + i, next.y + j};
+                    else if (dir == 1) check = {next.x + i, next.y - j};
+                    else if (dir == 2) check = {next.x - j, next.y + i};
+                    else check = {next.x + j, next.y + i};
+
+                    if (!is_valid_coord(check, map_size)) continue;
+                    if (known_object_map[check.x][check.y] == OBJECT::UNKNOWN)
+                        cnt++;
+                }
+            }
+            if (cnt > 0) {
+                candidate_dir.push_back(dir);
+                unexplored_count[dir] = cnt;
+            }
+        }
+    }
+
+    if (!candidate_dir.empty()) {
+        int best_dir = candidate_dir[0];
+        for (int dir : candidate_dir)
+            if (unexplored_count[dir] > unexplored_count[best_dir])
+                best_dir = dir;
+
+        vector<int> best_candidates;
+        for (int dir : candidate_dir)
+            if (unexplored_count[dir] == unexplored_count[best_dir])
+                best_candidates.push_back(dir);
+
+        if (best_candidates.size() > 1 && robots.size() >= 2) {
+            Coord other = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
+            int dx = other.x - curr.x;
+            int dy = other.y - curr.y;
+            int toward = 0;
+            if (abs(dx) > abs(dy)) toward = (dx > 0) ? 3 : 2;
+            else toward = (dy > 0) ? 0 : 1;
+            int avoid = (toward ^ 1);
+
+            for (int cand : best_candidates) {
+                if (cand == avoid) {
+                    best_dir = cand;
+                    break;
+                }
+            }
+            if (best_dir == toward && best_candidates.size() > 1) {
+                for (int cand : best_candidates) {
+                    if (cand != toward && cand != avoid) {
+                        best_dir = cand;
+                        break;
+                    }
                 }
             }
         }
-#ifdef gravity_mode
-        array<int, 4> direction_weights = {0, 0, 0, 0};
-        int current_tick = map_manager.tick; // tick 사용
-        for (int x = 0; x < map_size; ++x) {
-            for (int y = 0; y < map_size; ++y) {
-                if (known_object_map[x][y] == OBJECT::WALL) continue;
-                int weight = (last_seen_time[id][x][y] == -1) ? current_tick : (current_tick - last_seen_time[id][x][y]);
-                if (y > x && y > -x + 2 * curr.x) direction_weights[0] += weight; // UP
-                else if (y < x && y < -x + 2 * curr.x) direction_weights[1] += weight; // DOWN
-                else if (y < x && y > -x + 2 * curr.x) direction_weights[2] += weight; // LEFT
-                else direction_weights[3] += weight; // RIGHT
+
+        Coord next = curr + directions[best_dir];
+        drone_stack[id].push(curr);
+        cout << "[Drone " << id << "] DFS → Move " << best_dir << " to " << next << endl;
+        return static_cast<ROBOT::ACTION>(best_dir);
+    }
+
+    // frontier 탐색 과정
+    Coord nearest_frontier = {-1, -1};
+    int min_dist = 1e9;
+    for (int x = 0; x < map_size; ++x) {
+        for (int y = 0; y < map_size; ++y) {
+            Coord c{x, y};
+            if (visited[id][x][y] && is_frontier(c, known_object_map, map_size)) {
+                int dist = abs(curr.x - x) + abs(curr.y - y);
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    nearest_frontier = c;
+                }
             }
         }
-        int max_dir = 0;
-        for (int i = 1; i < 4; ++i) {
-            if (direction_weights[i] > direction_weights[max_dir])
-                max_dir = i;
-        }
-        Coord next = curr + directions[max_dir];
-        cout << "[Drone " << id << "] DFS complete, gravity mode → directional weight max at " << max_dir << " → move " << max_dir << endl;
-        return static_cast<ROBOT::ACTION>(max_dir);
-#else
-        // 중력 모드가 아닐 때: 무작위 이동이 아니라, 맵의 중앙으로 향하는 방향 선택
-        int mid_x = map_size / 2;
-        int mid_y = map_size / 2;
-        int dx = mid_x - curr.x;
-        int dy = mid_y - curr.y;
-
-        vector<ROBOT::ACTION> dir_priority;
-        if (abs(dx) > abs(dy)) {
-            if (dx > 0) dir_priority.push_back(ROBOT::ACTION::RIGHT);
-            else if (dx < 0) dir_priority.push_back(ROBOT::ACTION::LEFT);
-            if (dy > 0) dir_priority.push_back(ROBOT::ACTION::UP);
-            else if (dy < 0) dir_priority.push_back(ROBOT::ACTION::DOWN);
-        } else {
-            if (dy > 0) dir_priority.push_back(ROBOT::ACTION::UP);
-            else if (dy < 0) dir_priority.push_back(ROBOT::ACTION::DOWN);
-            if (dx > 0) dir_priority.push_back(ROBOT::ACTION::RIGHT);
-            else if (dx < 0) dir_priority.push_back(ROBOT::ACTION::LEFT);
-        }
-
-        // 모든 방향을 넣어서 fallback 시에도 반드시 이동하도록
-        for (int i = 0; i < 4; ++i)
-        {
-            if (std::find(dir_priority.begin(), dir_priority.end(), static_cast<ROBOT::ACTION>(i)) == dir_priority.end())
-                dir_priority.push_back(static_cast<ROBOT::ACTION>(i));
-        }
-
-        for (ROBOT::ACTION dir : dir_priority) {
-            Coord next = curr + directions[static_cast<int>(dir)];
-            if (next.x < 0 || next.x >= map_size || next.y < 0 || next.y >= map_size)
-                continue;
-            if (known_object_map[next.x][next.y] == OBJECT::WALL)
-                continue;
-            cout << "[Drone " << id << "] DFS complete, center-seeking or fallback → dir " << static_cast<int>(dir) << endl;
-            return dir;
-        }
-
-        cout << "[Drone " << id << "] DFS complete, all directions blocked → HOLD" << endl;
-        return ROBOT::ACTION::HOLD;
-#endif
     }
+
+    // TODO : 위에서 찾은 nearest_frontier로 이동 -> d*로 구현
+    if (nearest_frontier.x != -1) {
+        int dx = nearest_frontier.x - curr.x;
+        int dy = nearest_frontier.y - curr.y;
+        int dir = -1;
+        if (abs(dx) > abs(dy)) dir = (dx > 0) ? 3 : 2;
+        else if (abs(dy) > 0) dir = (dy > 0) ? 0 : 1;
+        else dir = 0;
+
+        Coord next = curr + directions[dir];
+        if (is_valid_coord(next, map_size) && known_object_map[next.x][next.y] != OBJECT::WALL) {
+            drone_stack[id].push(curr);
+            cout << "[Drone " << id << "] DFS fallback → Move to frontier at " << next << " dir=" << dir << endl;
+            return static_cast<ROBOT::ACTION>(dir);
+        }
+    }
+
+    cout << "[Drone " << id << "] No move available → HOLD" << endl;
+    return ROBOT::ACTION::HOLD;
 }
 
 
