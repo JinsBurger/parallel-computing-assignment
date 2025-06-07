@@ -10,8 +10,6 @@
 
 
 using namespace std;
-//#define gravity_mode
-
 
 MapManager::MapManager(): tick(0) {}
 
@@ -24,7 +22,7 @@ int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector
     // Not initialized yet
     if(observed_map.size() != this->object_map.size()) {
         int wh = this->w = this->h = this->object_map.size();
-        this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -1));
+        this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -1000)); // UNKNOWN MAP tick-> -1000
     }
 
     for(auto coord : observed_coords) {
@@ -935,7 +933,8 @@ bool is_valid_coord(const Coord& c, int map_size) {
 int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vector<vector<int>>& observed_map,
                    int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots, const Coord& self_coord) {
     if (!is_valid_coord(c, map_size)) return -1;
-    if (map[c.x][c.y] == OBJECT::WALL || map[c.x][c.y] == OBJECT::UNKNOWN) return -1;
+    //if (map[c.x][c.y] == OBJECT::WALL || map[c.x][c.y] == OBJECT::UNKNOWN) return -1;
+    if (map[c.x][c.y] == OBJECT::WALL) return -1;
 
     bool has_unknown = false;
     int tick_sum = 0, tick_cnt = 0;
@@ -945,10 +944,9 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
             if (!is_valid_coord(check, map_size)) continue;
             if (map[check.x][check.y] == OBJECT::UNKNOWN)
                 has_unknown = true;
-            if (observed_map[check.x][check.y] >= 0) {
-                tick_sum += observed_map[check.x][check.y];
-                tick_cnt++;
-            }
+
+            tick_sum += observed_map[check.x][check.y];
+            tick_cnt++;
         }
     }
     if (!has_unknown) return -1;
@@ -956,29 +954,34 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
     double tick_avg = (tick_cnt > 0) ? static_cast<double>(tick_sum) / tick_cnt : 0.0;
     int dist_to_other = abs(c.x - other_drone.x) + abs(c.y - other_drone.y);
     int dist_to_self = abs(c.x - self_coord.x) + abs(c.y - self_coord.y);
-    int sum_to_robots = 0;
+    int min_to_robot = 0;
     for (const auto& r : robots) {
         if (r->type == ROBOT::TYPE::DRONE) continue;
         Coord rc = r->get_coord();
-        sum_to_robots += abs(c.x - rc.x) + abs(c.y - rc.y);
+        int tmp = abs(c.x - rc.x) + abs(c.y - rc.y);
+        if( min_to_robot == 0 || tmp < min_to_robot) {
+            min_to_robot = tmp;
+        }
     }
 
     int tick_weight = 10;
-    int dist_to_other_weight = 5;
-    int dist_to_self_weight = 3;
-    int robot_dist_weight = 1;
-/*
-    cout << "Frontier score for " << c << ": "
-         << "tick_avg=" << tick_avg
-         << ", dist_to_other=" << dist_to_other
-         << ", dist_to_self=" << dist_to_self
-         << ", sum_to_robots=" << sum_to_robots
-         << endl;
-*/
-    return static_cast<int>(10000 - (tick_avg / (map_size * 100)) * tick_weight
+    int dist_to_other_weight = 8;
+    int dist_to_self_weight = 10;
+    int robot_dist_weight = 3;
+
+    int final_score = static_cast<int>(10000 - (tick_avg / map_size) * tick_weight
                             + dist_to_other * dist_to_other_weight
                             - dist_to_self * dist_to_self_weight
-                            - sum_to_robots * robot_dist_weight);
+                            - min_to_robot * robot_dist_weight);
+
+    cout << "Frontier score for " << c << " = " << final_score <<" -> 10000 - "
+         << (tick_avg / map_size) * tick_weight << " (tick_avg: " << tick_avg << ") + "
+         << dist_to_other * dist_to_other_weight << " (dist_to_other: " << dist_to_other << ") - "
+         << dist_to_self * dist_to_self_weight << " (dist_to_self: " << dist_to_self << ") - "
+         << min_to_robot * robot_dist_weight << " (min_to_robot: " << min_to_robot << ")" << endl;
+
+    
+    return static_cast<int>(final_score);
 
 }
 
@@ -1111,7 +1114,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             for (int x = 0; x < map_size; ++x) {
                 for (int y = 0; y < map_size; ++y) {
                     Coord c = {x, y};
-                    if (known_object_map[x][y] == OBJECT::UNKNOWN || known_object_map[x][y] == OBJECT::WALL) continue;
+                    //if (known_object_map[x][y] == OBJECT::UNKNOWN || known_object_map[x][y] == OBJECT::WALL) continue;
                     int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots, curr);
                     if (score > best_score) {
                         best_score = score;
@@ -1132,6 +1135,11 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
 
 
     if(drone_mode[robot.id] == DRONE_MODE::FRONTIER){
+        if (known_object_map[best_frontiers[robot.id].x][best_frontiers[robot.id].y] == OBJECT::WALL) {
+            std::cout << "[Drone " << id << "] Best frontier is a wall, switching to DFS" << endl;
+            drone_mode[robot.id] = DRONE_MODE::DFS;
+            return ROBOT::ACTION::HOLD;
+        }
         TaskDstarLite tmp_dstar(best_frontiers[robot.id].x, best_frontiers[robot.id].y, map_manager);
         vector<Coord> frontier_path;
         int av = tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);

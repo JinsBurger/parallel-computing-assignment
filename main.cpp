@@ -3,7 +3,7 @@
 
 int main(int argc, char *argv[])
 {
-    constexpr int MAP_SIZE = 30;
+    constexpr int MAP_SIZE = 20;
     constexpr int NUM_ROBOT = 6;
     constexpr int NUM_MAX_TASKS = 16;
     constexpr int NUM_INITIAL_TASKS = NUM_MAX_TASKS / 2;
@@ -20,8 +20,8 @@ int main(int argc, char *argv[])
 
     unsigned seed = static_cast<unsigned int>(time(NULL));
     printf("SEED: 0x%x \n", seed);
-    srand(seed);
-    // srand(0);
+    //srand(seed);
+    srand(0x6844407a);
 
     TIMER timer;
     MAP map(MAP_SIZE, NUM_ROBOT, NUM_INITIAL_TASKS, NUM_MAX_TASKS, WALL_DENSITY, ROBOT_ENERGY);
