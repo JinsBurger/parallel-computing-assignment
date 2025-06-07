@@ -262,7 +262,7 @@ def parse_task(lines):
 if __name__ == '__main__':
     os.system(f"./MRTA parse > {MRTA_LOG_PATH}")
 
-    MAP_SIZE = 40
+    MAP_SIZE = 20
     map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, traces=['RD0', 'RD3'])
 
     with open(MRTA_LOG_PATH, "r") as f:

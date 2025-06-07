@@ -1086,15 +1086,37 @@ bool is_valid_coord(const Coord& c, int map_size) {
     return c.x >= 0 && c.x < map_size && c.y >= 0 && c.y < map_size;
 }
 
-// Helper: Check if cell is frontier (visited and has unknown neighbor)
-bool is_frontier(const Coord& c, const vector<vector<OBJECT>>& map, int map_size) {
-    if (map[c.x][c.y] == OBJECT::WALL) return false;
-    for (int dir = 0; dir < 4; ++dir) {
-        Coord adj = c + directions[dir];
-        if (is_valid_coord(adj, map_size) && map[adj.x][adj.y] == OBJECT::UNKNOWN)
-            return true;
+// Helper: Compute frontier score (higher is better)
+int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vector<vector<int>>& observed_map,
+                   int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots) {
+    if (map[c.x][c.y] == OBJECT::WALL) return -1;
+
+    bool has_unknown = false;
+    int tick_sum = 0, tick_cnt = 0;
+    for (int dx = -2; dx <= 2; ++dx) {
+        for (int dy = -2; dy <= 2; ++dy) {
+            Coord check = {c.x + dx, c.y + dy};
+            if (!is_valid_coord(check, map_size)) continue;
+            if (map[check.x][check.y] == OBJECT::UNKNOWN)
+                has_unknown = true;
+            if (observed_map[check.x][check.y] >= 0) {
+                tick_sum += observed_map[check.x][check.y];
+                tick_cnt++;
+            }
+        }
     }
-    return false;
+    if (!has_unknown) return -1;
+
+    double tick_avg = (tick_cnt > 0) ? static_cast<double>(tick_sum) / tick_cnt : 0.0;
+    int dist_to_other = abs(c.x - other_drone.x) + abs(c.y - other_drone.y);
+    int sum_to_robots = 0;
+    for (const auto& r : robots) {
+        if (r->type == ROBOT::TYPE::DRONE) continue;
+        Coord rc = r->get_coord();
+        sum_to_robots += abs(c.x - rc.x) + abs(c.y - rc.y);
+    }
+
+    return static_cast<int>(10000 - tick_avg * 10 + dist_to_other * 5 - sum_to_robots);
 }
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
@@ -1104,8 +1126,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const vector<shared_ptr<TASK>> &active_tasks,
                                      const vector<shared_ptr<ROBOT>> &robots,
                                      const ROBOT &robot)
-{
-
+{   
     // WHEEL, CATERPILLAR
     if (robot.type != ROBOT::TYPE::DRONE) {
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
@@ -1124,7 +1145,6 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         }
         return res;
     }
-
 
     // DRONE
     int map_size = static_cast<int>(known_object_map.size());
@@ -1211,42 +1231,27 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         return static_cast<ROBOT::ACTION>(best_dir);
     }
 
-    // BFS 기반으로 가까운 frontier 탐색 (but only determine target coord)
-    queue<Coord> q;
-    map<Coord, Coord> parent;
-    set<Coord> visited_bfs;
-    Coord nearest_frontier = {-1, -1};
+    // If no unexplored neighbors, try to find a frontier
+    Coord best_frontier = {-1, -1};
+    int best_score = -1;
+    Coord other_drone = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
+    const auto& obs_map = map_manager.observed_map;
 
-    q.push(curr);
-    visited_bfs.insert(curr);
-
-    while (!q.empty()) {
-        Coord here = q.front(); q.pop();
-        if (is_frontier(here, known_object_map, map_size)) {
-            nearest_frontier = here;
-            break;
-        }
-        for (int d = 0; d < 4; ++d) {
-            Coord next = here + directions[d];
-            if (!is_valid_coord(next, map_size)) continue;
-            if (known_object_map[next.x][next.y] == OBJECT::WALL) continue;
-            if (visited_bfs.count(next)) continue;
-            visited_bfs.insert(next);
-            parent[next] = here;
-            q.push(next);
+    for (int x = 0; x < map_size; ++x) {
+        for (int y = 0; y < map_size; ++y) {
+            Coord c = {x, y};
+            int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots);
+            if (score > best_score) {
+                best_score = score;
+                best_frontier = c;
+            }
         }
     }
+    cout << "[Drone " << id << "] Best frontier: " << best_frontier << " with score " << best_score << endl;
 
-    if (nearest_frontier.x != -1) {
-        // TODO: The path can be changed while the drone is moving, therefore the frontier path also has to be dealt with in on_info_updated.
-        TaskDstarLite tmp_dstar(nearest_frontier.x, nearest_frontier.y, map_manager);
-        vector<Coord> frontier_path;
-        tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);
-        drone_path[robot.id] =  frontier_path;
-
-        cout << "nearest_frontier(y,x): " << nearest_frontier.y << ", " << nearest_frontier.x << endl;
-        int dx = nearest_frontier.x - curr.x;
-        int dy = nearest_frontier.y - curr.y;
+    if (best_frontier.x != -1) {
+        int dx = best_frontier.x - curr.x;
+        int dy = best_frontier.y - curr.y;
         int dir = -1;
         if (abs(dx) > abs(dy)) dir = (dx > 0) ? 3 : 2;
         else if (abs(dy) > 0) dir = (dy > 0) ? 0 : 1;
@@ -1275,6 +1280,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     cout << "[Drone " << id << "] No move available → HOLD" << endl;
     return ROBOT::ACTION::HOLD;
 }
+
 
 
 
