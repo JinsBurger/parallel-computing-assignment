@@ -769,15 +769,17 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         for(const auto& robotPtr : robots){
             if(robotPtr->type != ROBOT::TYPE::DRONE) cnt++;
         }
-        distRT = vector<vector<int>>(cnt, vector<int>(tasks_dstar.size()));
-        distTT = vector<vector<int>>(tasks_dstar.size(), vector<int>(tasks_dstar.size()));
-        RtoT = vector<vector<vector<Coord>>>(cnt,vector<vector<Coord>>(tasks_dstar.size()));
+        distRT = vector<vector<int>>(cnt, vector<int>(active_tasks.size()));
+        distTT = vector<vector<int>>(active_tasks.size(), vector<int>(active_tasks.size()));
+        RtoT = vector<vector<vector<Coord>>>(cnt,vector<vector<Coord>>(active_tasks.size()));
         robotPath.resize(cnt);
         //printf("resize done\n");
         int i=0, j=0;
+        int index_to_task[100]={0,};
         for(auto task : active_tasks){
             auto &task_dstar = tasks_dstar.at(task->id);
             j=0;
+            index_to_task[i]=task->id;
             for(const auto& robotPtr : robots){
                 if(robotPtr->type == ROBOT::TYPE::CATERPILLAR || robotPtr->type == ROBOT::TYPE::WHEEL) {
                     //TODO: remain_progress, energy lack, if calculate_cost returns -1, means none of possible path found.
@@ -823,15 +825,24 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             }
         }
 
+        cout << "index_to_task: ";
+        for(i=0; i<active_tasks.size(); i++){
+            cout << index_to_task[i] << " ";
+        }
+        cout << endl;
+
         robot_task.clear();
         i=0;
         vector<pair<int, Coord>> drone_info;
+        std::cout << "MCMF Results:" << endl;
         for(const auto& robotPtr : robots){
             if(robotPtr->type == ROBOT::TYPE::DRONE){
                 drone_info.push_back({robotPtr->id, robotPtr->get_coord()});
                 continue;
             }
+            std::cout << robotPtr->id << ": ";
             for(int j=0; j<robotPath[i].size(); j++){
+                std::cout << "{" << robotPath[i][j] << ", " << index_to_task[robotPath[i][j]] << "} ";
                 for(int k=0; k<RtoT[i][robotPath[i][j]].size(); k++){
                     if(robot_task.find(robotPtr->id)==robot_task.end()){
                         queue<Coord> tmp;
@@ -842,8 +853,10 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                 }
             }
             i++;
+            cout << endl;
         }
-
+        
+        i=0;
         for(const auto& robotPtr : robots){
             if((robotPtr->type != ROBOT::TYPE::DRONE) && (robotPath[i].size()==0)){
                 int best_di=0, best_cost=INFINITE;
@@ -866,6 +879,7 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                     else robot_task[robotPtr->id].push(coord);
                 }
             }
+            if(robotPtr->type != ROBOT::TYPE::DRONE) i++;
         }
 
         printf("robot_task created\n");
@@ -953,14 +967,14 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
     int dist_to_other_weight = 5;
     int dist_to_self_weight = 3;
     int robot_dist_weight = 1;
-
+/*
     cout << "Frontier score for " << c << ": "
          << "tick_avg=" << tick_avg
          << ", dist_to_other=" << dist_to_other
          << ", dist_to_self=" << dist_to_self
          << ", sum_to_robots=" << sum_to_robots
          << endl;
-
+*/
     return static_cast<int>(10000 - (tick_avg / (map_size * 100)) * tick_weight
                             + dist_to_other * dist_to_other_weight
                             - dist_to_self * dist_to_self_weight
@@ -1327,12 +1341,4 @@ void assign_tasks_mcmf(const vector<vector<int>>& distRT,
         }
     }
 
-    /* ---------- 결과 확인용 출력 ---------- */
-    cout << "MCMF result : flow=" << flow
-              << ", cost="   << totalCost << '\n';
-    for (int r = 0; r < R; ++r) {
-        cout << "  Robot " << r << " :";
-        for (int t : robotPath[r]) cout << ' ' << t;
-        cout << '\n';
-    }
 }
