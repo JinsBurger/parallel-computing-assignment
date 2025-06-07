@@ -274,7 +274,7 @@ def parse_task(lines):
     return task_info
 
 if __name__ == '__main__':
-    #os.system(f"./MRTA parse | tee {MRTA_LOG_PATH} ")
+    os.system(f"./MRTA parse | tee {MRTA_LOG_PATH} ")
     input("Enter after MRTA is finished")
     MAP_SIZE = 20
     map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, drones=['RD0', 'RD3'])
