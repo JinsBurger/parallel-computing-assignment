@@ -871,209 +871,6 @@ bool Scheduler::on_task_reached(const set<Coord> &observed_coords,
     return res;
 }
 
-/*
-// 방향 벡터: 상, 하, 좌, 우
-static const Coord directions[4] = {
-    {0, 1},  // UP
-    {0, -1}, // DOWN
-    {-1, 0}, // LEFT
-    {1, 0}   // RIGHT
-};
-
-// 반대 방향 인덱스
-static const int opposite[4] = {1, 0, 3, 2};
-
-static map<int, stack<Coord>> drone_stack;
-static map<int, vector<vector<bool>>> visited;
-static map<int, bool> initialized;
-static map<int, ROBOT::ACTION> initial_direction;
-static map<int, set<Coord>> edge_visited;
-static map<int, bool> came_from_inner;
-static map<int, Coord> fallback_target;
-static map<int, int> fallback_steps;
-static map<int, ROBOT::ACTION> fallback_dir;
-
-ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
-                                     const set<Coord> &updated_coords,
-                                     const vector<vector<vector<int>>> &known_cost_map,
-                                     const vector<vector<OBJECT>> &known_object_map,
-                                     const vector<shared_ptr<TASK>> &active_tasks,
-                                     const vector<shared_ptr<ROBOT>> &robots,
-                                     const ROBOT &robot)
-{
-    if (robot.type != ROBOT::TYPE::DRONE) {
-        ROBOT::ACTION res = ROBOT::ACTION::HOLD;
-        if (robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()) {
-            for (int dir = 0; dir < 4; dir++) {
-                if (robot.get_coord() + directions[dir] == robot_task[robot.id].front()) {
-                    res = static_cast<ROBOT::ACTION>(dir);
-                    break;
-                }
-            }
-            robot_task[robot.id].pop();
-        }
-        if (res != ROBOT::ACTION::HOLD) {
-            record_target_coord[robot.id] = robot.get_coord() + directions[static_cast<int>(res)];
-            record_start[robot.id] = map_manager.tick;
-        }
-        return res;
-    }
-
-    int map_size = static_cast<int>(known_object_map.size());
-    int id = robot.id;
-    Coord curr = robot.get_coord();
-
-    if (!initialized[id]) {
-        initialized[id] = true;
-        int cx = curr.x, cy = curr.y;
-        int mid = map_size / 2;
-
-        if (cx < mid && cy < mid)
-            initial_direction[id] = ROBOT::ACTION::UP;
-        else if (cx >= mid && cy < mid)
-            initial_direction[id] = ROBOT::ACTION::LEFT;
-        else if (cx < mid && cy >= mid)
-            initial_direction[id] = ROBOT::ACTION::RIGHT;
-        else
-            initial_direction[id] = ROBOT::ACTION::DOWN;
-
-        fallback_steps[id] = 0;
-
-        cout << "[Drone " << id << "] initial position: " << curr << ", direction set to " << initial_direction[id] << endl;
-        return initial_direction[id];
-    }
-
-    if (visited.count(id) == 0) {
-        visited[id] = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
-        drone_stack[id].push(curr);
-        cout << "[Drone " << id << "] DFS initialized at " << curr << endl;
-    }
-
-    visited[id][curr.x][curr.y] = true;
-
-    vector<int> candidate_dir;
-    vector<int> unexplored_count(4, 0);
-
-    for (int dir = 0; dir < 4; ++dir) {
-        Coord next = curr + directions[dir];
-        if (next.x < 0 || next.x >= map_size || next.y < 0 || next.y >= map_size)
-            continue;
-        if (known_object_map[next.x][next.y] == OBJECT::WALL)
-            continue;
-        if (!visited[id][next.x][next.y]) {
-            int cnt = 0;
-            for (int i = -2; i <= 2; ++i) {
-                for (int j = 3; j <= 5; ++j) {
-                    Coord check;
-                    if (dir == 0)       check = {curr.x + i, curr.y + j};
-                    else if (dir == 1)  check = {curr.x + i, curr.y - j};
-                    else if (dir == 2)  check = {curr.x - j, curr.y + i};
-                    else                check = {curr.x + j, curr.y + i};
-
-                    if (check.x < 0 || check.x >= map_size || check.y < 0 || check.y >= map_size)
-                        continue;
-
-                    if (known_object_map[check.x][check.y] == OBJECT::UNKNOWN)
-                        cnt++;
-                }
-            }
-
-            if (cnt > 0) {
-                candidate_dir.push_back(dir);
-                unexplored_count[dir] = cnt;
-            }
-        }
-    }
-
-    if (!candidate_dir.empty()) {
-        int best_dir = candidate_dir[0];
-        for (int dir : candidate_dir)
-            if (unexplored_count[dir] > unexplored_count[best_dir])
-                best_dir = dir;
-
-        vector<int> best_candidates;
-        for (int dir : candidate_dir)
-            if (unexplored_count[dir] == unexplored_count[best_dir])
-                best_candidates.push_back(dir);
-
-        // 다른 드론의 방향과 비교하여 우선순위 조정
-        if (robots.size() >= 2) {
-            Coord other = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
-            int dx = other.x - curr.x;
-            int dy = other.y - curr.y;
-
-            int toward = 0;
-            if (abs(dx) > abs(dy)) toward = (dx > 0) ? 3 : 2; // RIGHT or LEFT
-            else toward = (dy > 0) ? 0 : 1;                    // UP or DOWN
-
-            int avoid = opposite[toward];
-
-            for (int cand : best_candidates) {
-                if (cand == avoid) {
-                    best_dir = cand;
-                    break;
-                }
-            }
-            if (best_dir == toward && best_candidates.size() > 1) {
-                for (int cand : best_candidates) {
-                    if (cand != toward && cand != avoid) {
-                        best_dir = cand;
-                        break;
-                    }
-                }
-            }
-        }
-
-        Coord next = curr + directions[best_dir];
-        drone_stack[id].push(curr);
-        cout << "[Drone " << id << "] Move from " << curr << " to " << next << " (dir=" << best_dir << ")" << endl;
-        fallback_steps[id] = 0;
-        return static_cast<ROBOT::ACTION>(best_dir);
-    }
-
-    if (!drone_stack[id].empty()) {
-        Coord parent = drone_stack[id].top();
-        drone_stack[id].pop();
-
-        for (int dir = 0; dir < 4; ++dir) {
-            if (curr + directions[dir] == parent) {
-                cout << "[Drone " << id << "] Backtrack from " << curr << " to " << parent << " (dir=" << dir << ")" << endl;
-                fallback_steps[id] = 0;
-                return static_cast<ROBOT::ACTION>(dir);
-            }
-        }
-    }
-
-    if (fallback_steps[id] > 0) {
-        Coord next = curr + directions[static_cast<int>(fallback_dir[id])];
-        if (next.x >= 0 && next.x < map_size && next.y >= 0 && next.y < map_size &&
-            known_object_map[next.x][next.y] != OBJECT::WALL) {
-            fallback_steps[id]--;
-            cout << "[Drone " << id << "] Continuing fallback in dir=" << static_cast<int>(fallback_dir[id]) << " → remaining: " << fallback_steps[id] << endl;
-            return fallback_dir[id];
-        }
-    }
-
-    vector<int> fallback_candidates;
-    for (int dir = 0; dir < 4; ++dir) {
-        Coord next = curr + directions[dir];
-        if (next.x >= 0 && next.x < map_size && next.y >= 0 && next.y < map_size &&
-            known_object_map[next.x][next.y] != OBJECT::WALL && static_cast<int>(fallback_dir[id]) != dir) {
-            fallback_candidates.push_back(dir);
-        }
-    }
-    if (!fallback_candidates.empty()) {
-        int new_dir = fallback_candidates[rand() % fallback_candidates.size()];
-        fallback_steps[id] = 2;
-        fallback_dir[id] = static_cast<ROBOT::ACTION>(new_dir);
-        cout << "[Drone " << id << "] New fallback (non-repeating) initialized → dir=" << new_dir << endl;
-        return static_cast<ROBOT::ACTION>(new_dir);
-    }
-
-    return ROBOT::ACTION::HOLD;
-}
-*/
-
 // 방향 벡터: 상, 하, 좌, 우
 static const Coord directions[4] = {
     {0, 1},  // UP
@@ -1093,8 +890,9 @@ bool is_valid_coord(const Coord& c, int map_size) {
 
 // Helper: Compute frontier score (higher is better)
 int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vector<vector<int>>& observed_map,
-                   int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots) {
-    if (map[c.x][c.y] == OBJECT::WALL) return -1;
+                   int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots, const Coord& self_coord) {
+    if (!is_valid_coord(c, map_size)) return -1;
+    if (map[c.x][c.y] == OBJECT::WALL || map[c.x][c.y] == OBJECT::UNKNOWN) return -1;
 
     bool has_unknown = false;
     int tick_sum = 0, tick_cnt = 0;
@@ -1114,6 +912,7 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
 
     double tick_avg = (tick_cnt > 0) ? static_cast<double>(tick_sum) / tick_cnt : 0.0;
     int dist_to_other = abs(c.x - other_drone.x) + abs(c.y - other_drone.y);
+    int dist_to_self = abs(c.x - self_coord.x) + abs(c.y - self_coord.y);
     int sum_to_robots = 0;
     for (const auto& r : robots) {
         if (r->type == ROBOT::TYPE::DRONE) continue;
@@ -1121,12 +920,31 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         sum_to_robots += abs(c.x - rc.x) + abs(c.y - rc.y);
     }
 
-    cout << "[Frontier Score] Coord: " << c << ", Tick Avg: " << tick_avg
-         << ", Dist to Other: " << dist_to_other
-         << ", Sum to Robots: " << sum_to_robots << endl;
-    return static_cast<int>(10000 - tick_avg * 10 + dist_to_other * 5 - sum_to_robots);
+    int tick_weight = 10;
+    int dist_to_other_weight = 5;
+    int dist_to_self_weight = 3;
+    int robot_dist_weight = 1;
+
+    cout << "Frontier score for " << c << ": "
+         << "tick_avg=" << tick_avg
+         << ", dist_to_other=" << dist_to_other
+         << ", dist_to_self=" << dist_to_self
+         << ", sum_to_robots=" << sum_to_robots
+         << endl;
+         
+    return static_cast<int>(10000 - (tick_avg / (map_size * 100)) * tick_weight
+                            + dist_to_other * dist_to_other_weight
+                            - dist_to_self * dist_to_self_weight
+                            - sum_to_robots * robot_dist_weight);
+
 }
 
+
+enum DRONE_MODE {
+    DFS, FRONTIER, WORK_DONE
+};
+map<int, DRONE_MODE> drone_mode;
+Coord best_frontier = {-1, -1};
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const set<Coord> &updated_coords,
@@ -1257,14 +1075,15 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                 for (int y = 0; y < map_size; ++y) {
                     Coord c = {x, y};
                     if (known_object_map[x][y] == OBJECT::UNKNOWN || known_object_map[x][y] == OBJECT::WALL) continue;
-                    int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots);
+                    int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots, curr);
                     if (score > best_score) {
                         best_score = score;
                         best_frontier = c;
                     }
                 }
             }
-            std::cout << "[Drone " << id << "] Best frontier: " << best_frontier << " with score " << best_score << endl;
+            std::cout << "[Drone " << id << "] Best frontier: " << best_frontier << " with score " << best_score << " from " << curr << endl;
+
             if(best_frontier.x == -1){
                 // Backtrack if no unexplored neighbors
                 drone_mode[robot.id] = DRONE_MODE::WORK_DONE;
