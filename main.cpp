@@ -3,7 +3,7 @@
 
 int main(int argc, char *argv[])
 {
-    constexpr int MAP_SIZE = 20;
+    constexpr int MAP_SIZE = 30;
     constexpr int NUM_ROBOT = 6;
     constexpr int NUM_MAX_TASKS = 16;
     constexpr int NUM_INITIAL_TASKS = NUM_MAX_TASKS / 2;
@@ -18,7 +18,9 @@ int main(int argc, char *argv[])
         parse_flag = 1;
     }
 
-    srand(static_cast<unsigned int>(time(NULL)));
+    unsigned seed = static_cast<unsigned int>(time(NULL));
+    printf("SEED: 0x%x \n", seed);
+    srand(seed);
     // srand(0);
 
     TIMER timer;
@@ -126,4 +128,5 @@ int main(int argc, char *argv[])
     for (unit = 0; unit < 4 && count >= 1e3; ++unit)
         count /= 1e3;
     cout << "Algorithm time : " << count << units[unit] << endl;
+    printf("SEED: 0x%x \n", seed);
 }
