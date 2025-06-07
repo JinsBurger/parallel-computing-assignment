@@ -725,9 +725,14 @@ MapManager map_manager;
 
 static map<int, vector<vector<int>>> last_seen_time;
 map<int, queue<Coord>> robot_task;
-map<int, queue<Coord>> drone_path;
+map<int, vector<Coord>> drone_path;
 map<int,int> record_start;
 map<int,Coord> record_target_coord;
+enum DRONE_MODE {
+    DFS, FRONTIER, WORK_DONE
+};
+map<int, DRONE_MODE> drone_mode;
+map<int, Coord> best_frontiers;
 int last_task_reach_tick = -1;
 
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
@@ -1122,11 +1127,6 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
     return static_cast<int>(10000 - tick_avg * 10 + dist_to_other * 5 - sum_to_robots);
 }
 
-enum DRONE_MODE {
-    DFS, FRONTIER, WORK_DONE
-};
-map<int, DRONE_MODE> drone_mode;
-Coord best_frontier = {-1, -1};
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const set<Coord> &updated_coords,
@@ -1170,7 +1170,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
 
     visited[id][curr.x][curr.y] = true;
 
-    if((drone_mode[robot.id] == DRONE_MODE::FRONTIER) && (best_frontier.x == curr.x) && (best_frontier.y == curr.y)){
+    if((drone_mode[robot.id] == DRONE_MODE::FRONTIER) && (best_frontiers[robot.id].x == curr.x) && (best_frontiers[robot.id].y == curr.y)){
         drone_mode[robot.id] = DRONE_MODE::DFS;
     }
 
@@ -1247,7 +1247,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         else{
             // If no unexplored neighbors, try to find a frontier
             drone_mode[robot.id] = DRONE_MODE::FRONTIER;
-            best_frontier = {-1, -1};
+            Coord best_frontier = {-1, -1};
             
             int best_score = -1;
             Coord other_drone = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
@@ -1265,19 +1265,21 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                 }
             }
             std::cout << "[Drone " << id << "] Best frontier: " << best_frontier << " with score " << best_score << endl;
-
             if(best_frontier.x == -1){
                 // Backtrack if no unexplored neighbors
                 drone_mode[robot.id] = DRONE_MODE::WORK_DONE;
+            } else {
+                best_frontiers[robot.id] = best_frontier;
             }
         }
     }
 
 
     if(drone_mode[robot.id] == DRONE_MODE::FRONTIER){
-        TaskDstarLite tmp_dstar(best_frontier.x, best_frontier.y, map_manager);
+        TaskDstarLite tmp_dstar(best_frontiers[robot.id].x, best_frontiers[robot.id].y, map_manager);
         vector<Coord> frontier_path;
         tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);
+        drone_path[robot.id] = frontier_path;
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
         Coord next_dir = frontier_path[0];
         for (int dir = 0; dir < 4; dir++) {
