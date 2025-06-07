@@ -78,6 +78,7 @@ class MAP_GIF:
         self.map_size = map_size
         self.trace_map = [[0 for _ in range(map_size)] for _ in range(map_size)]
         self.drones_color = {}
+        self.seed = -1
         self.zorder = {
             "WALL": 100,
             "OBSERVED": 100,
@@ -87,9 +88,9 @@ class MAP_GIF:
         }
 
         # 어두운 색상 리스트
-        color_names = get_dark_colors()
-        color_names.remove("black")
-        color_names.remove("red")
+        color_names = ["purple", "blue", "yellow"] #get_dark_colors()
+        # color_names.remove("black")
+        # color_names.remove("red")
 
         for t in drones:
             color = random.choice(color_names)
@@ -207,7 +208,10 @@ class MAP_GIF:
         
         # Save as GIF and Video
         plt.subplots_adjust(bottom=0.3)
-        fig.text(0.5, 0.2, f"Tick: {tick}", ha='center', fontsize=12)
+        if tick == 0:
+          fig.text(0.5, 0.2, f"Tick: {tick}, SEED: {self.seed}", ha='center', fontsize=12)
+        else:
+          fig.text(0.5, 0.2, f"Tick: {tick}", ha='center', fontsize=12)
         fig.text(0.5, 0.15, f"Observed: {observed_cnt} / {real_width}x{real_width} (%.2f%%)"%((observed_cnt/real_width**2)*100), ha='center', fontsize=7)
         if "max" in latest_task_info:
           tasks = task_info['tasks']
@@ -269,8 +273,8 @@ def parse_task(lines):
     return task_info
 
 if __name__ == '__main__':
-    os.system(f"./MRTA parse > {MRTA_LOG_PATH}")
-
+    os.system(f"./MRTA parse | tee {MRTA_LOG_PATH} ")
+    input("Enter after MRTA is finished")
     MAP_SIZE = 20
     map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, drones=['RD0', 'RD3'])
 
@@ -282,13 +286,17 @@ if __name__ == '__main__':
         latest_task_info = {}
         latest_robot_dstar = {}
         robot_path_flag = False
+        seed = -1
 
         latest_drone_frontier_path = {}
         drone_path_flag = False
 
         tick = 0
         for l in f.read().splitlines():        
-            if l.startswith("Start Task Info"):
+            if l.startswith("SEED: "):
+                seed = int(l[len("SEED: "):], 16)
+                map_gif.seed = seed
+            elif l.startswith("Start Task Info"):
                 task_flag = True
             
             elif l.startswith("End Task Info"):
