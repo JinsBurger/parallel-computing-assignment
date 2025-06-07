@@ -823,10 +823,14 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             }
         }
 
-        robot_task.clear();
+    robot_task.clear();
         i=0;
+        vector<pair<int, Coord>> drone_info;
         for(const auto& robotPtr : robots){
-            if(robotPtr->type == ROBOT::TYPE::DRONE) continue;
+            if(robotPtr->type == ROBOT::TYPE::DRONE){
+                drone_info.push_back({robotPtr->id, robotPtr->get_coord()});
+                continue;
+            }
             for(int j=0; j<robotPath[i].size(); j++){
                 for(int k=0; k<RtoT[i][robotPath[i][j]].size(); k++){
                     if(robot_task.find(robotPtr->id)==robot_task.end()){
@@ -839,6 +843,22 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             }
             i++;
         }
+
+        for(const auto& robotPtr : robots){
+            if((robotPtr->type != ROBOT::TYPE::DRONE) && (robotPath[i].size()==0)){
+                TaskDstarLite tmp_dstar(drone_info.front().second.x, drone_info.front().second.y, map_manager);
+                vector<Coord> follow_drone_path;
+                int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), ROBOT::TYPE::DRONE, follow_drone_path);
+                for(Coord coord : follow_drone_path){
+                    if(robot_task.find(robotPtr->id)==robot_task.end()){
+                        queue<Coord> tmp;
+                        tmp.push(coord);
+                    }
+                    else robot_task[robotPtr->id].push(coord);
+                }
+            }
+        }
+
         printf("robot_task created\n");
     }
 
