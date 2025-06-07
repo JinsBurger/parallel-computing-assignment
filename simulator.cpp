@@ -207,6 +207,13 @@ void MAP::print_cost_map(ROBOT::TYPE type) const
 
 
 int observed_cnt;
+
+enum DRONE_MODE {
+    DFS, FRONTIER, WORK_DONE
+};
+extern map<int, vector<Coord>> drone_path;
+extern map<int, DRONE_MODE> drone_mode;
+
 void MAP::print_object_map_if_changed(int tick) {
     if(is_object_map_changed) {
         cout << "Start Task Info" << endl;
@@ -216,7 +223,20 @@ void MAP::print_object_map_if_changed(int tick) {
         cout << "Robot Path Info: " << endl;
         print_all_robot_path();
         cout << "End Path Info: " << endl;
-        
+
+        for(auto r: robots) {
+            for(auto it = drone_mode.begin(); it != drone_mode.end(); it++) {
+                int r_id = it->first;
+                if(drone_mode[r_id] == DRONE_MODE::FRONTIER) {
+                    cout << "Drone " << r_id << " Path Info:" << endl;
+                    for(auto path : drone_path.at(r_id)) 
+                       cout << "(" << path.y  << ", " << path.x << ") | ";
+                    cout << "Drone Path End" << endl;
+                    
+                }
+            }
+        }
+
         observed_cnt = 0;
         cout << "Start Object map: " << tick << endl;
         print_object_map();
