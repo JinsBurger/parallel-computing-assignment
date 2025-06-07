@@ -1116,6 +1116,9 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         sum_to_robots += abs(c.x - rc.x) + abs(c.y - rc.y);
     }
 
+    cout << "[Frontier Score] Coord: " << c << ", Tick Avg: " << tick_avg
+         << ", Dist to Other: " << dist_to_other
+         << ", Sum to Robots: " << sum_to_robots << endl;
     return static_cast<int>(10000 - tick_avg * 10 + dist_to_other * 5 - sum_to_robots);
 }
 
@@ -1253,6 +1256,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             for (int x = 0; x < map_size; ++x) {
                 for (int y = 0; y < map_size; ++y) {
                     Coord c = {x, y};
+                    
                     int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots);
                     if (score > best_score) {
                         best_score = score;
