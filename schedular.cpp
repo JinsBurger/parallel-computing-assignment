@@ -909,6 +909,20 @@ bool is_valid_coord(const Coord& c, int map_size) {
     return c.x >= 0 && c.x < map_size && c.y >= 0 && c.y < map_size;
 }
 
+#include <cstdlib> // getenv
+
+int get_env_or_default(const char* name, int default_value) {
+    const char* val = std::getenv(name);
+    if (val) {
+        try {
+            return std::stoi(val);
+        } catch (...) {
+            return default_value;
+        }
+    }
+    return default_value;
+}
+
 // Helper: Compute frontier score (higher is better)
 int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vector<vector<int>>& observed_map,
                    int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots, const Coord& self_coord) {
@@ -944,10 +958,10 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         }
     }
 
-    int tick_weight = 10;
-    int dist_to_other_weight = 8;
-    int dist_to_self_weight = 10;
-    int robot_dist_weight = 3;
+    int tick_weight         = get_env_or_default("WEIGHT_TICK", 2);
+    int dist_to_other_weight = get_env_or_default("WEIGHT_DIST_OTHER", 8);
+    int dist_to_self_weight  = get_env_or_default("WEIGHT_DIST_SELF", 10);
+    int robot_dist_weight    = get_env_or_default("WEIGHT_DIST_ROBOT", 3);
 
     int final_score = static_cast<int>(10000 - (tick_avg / map_size) * tick_weight
                             + dist_to_other * dist_to_other_weight
