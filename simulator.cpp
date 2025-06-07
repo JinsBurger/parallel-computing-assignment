@@ -209,7 +209,7 @@ void MAP::print_cost_map(ROBOT::TYPE type) const
 int observed_cnt;
 
 enum DRONE_MODE {
-    DFS, FRONTIER, WORK_DONE
+    NOT_INIT, DFS, FRONTIER, WORK_DONE, GOBACK
 };
 extern map<int, vector<Coord>> drone_path;
 extern map<int, DRONE_MODE> drone_mode;
