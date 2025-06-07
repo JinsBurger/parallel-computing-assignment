@@ -1278,7 +1278,12 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     if(drone_mode[robot.id] == DRONE_MODE::FRONTIER){
         TaskDstarLite tmp_dstar(best_frontiers[robot.id].x, best_frontiers[robot.id].y, map_manager);
         vector<Coord> frontier_path;
-        tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);
+        int av = tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);
+        if(av == -1){
+            std::cout << "[Drone " << id << "] is trapped!" << endl;
+            drone_mode[robot.id] = DRONE_MODE::DFS;
+            return ROBOT::ACTION::HOLD;
+        }
         drone_path[robot.id] = frontier_path;
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
         Coord next_dir = frontier_path[0];
