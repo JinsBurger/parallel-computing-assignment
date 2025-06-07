@@ -931,7 +931,7 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
          << ", dist_to_self=" << dist_to_self
          << ", sum_to_robots=" << sum_to_robots
          << endl;
-         
+
     return static_cast<int>(10000 - (tick_avg / (map_size * 100)) * tick_weight
                             + dist_to_other * dist_to_other_weight
                             - dist_to_self * dist_to_self_weight
@@ -939,12 +939,6 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
 
 }
 
-
-enum DRONE_MODE {
-    DFS, FRONTIER, WORK_DONE
-};
-map<int, DRONE_MODE> drone_mode;
-Coord best_frontier = {-1, -1};
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const set<Coord> &updated_coords,
