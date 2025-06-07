@@ -1256,7 +1256,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             for (int x = 0; x < map_size; ++x) {
                 for (int y = 0; y < map_size; ++y) {
                     Coord c = {x, y};
-                    
+                    if (known_object_map[x][y] == OBJECT::UNKNOWN || known_object_map[x][y] == OBJECT::WALL) continue;
                     int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots);
                     if (score > best_score) {
                         best_score = score;
