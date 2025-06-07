@@ -1274,26 +1274,14 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         TaskDstarLite tmp_dstar(best_frontier.x, best_frontier.y, map_manager);
         vector<Coord> frontier_path;
         tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);
-        for(auto coord : frontier_path){
-            if(drone_path.find(robot.id)==drone_path.end()){
-                queue<Coord> tmp;
-                tmp.push(coord);
-                drone_path[robot.id] = tmp;
-            }
-            else drone_path[robot.id].push(coord);
-        }
-
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
-        if (drone_path.find(robot.id) != drone_path.end() && !drone_path[robot.id].empty()) {
-            for (int dir = 0; dir < 4; dir++) {
-                if (robot.get_coord() + directions[dir] == drone_path[robot.id].front()) {
-                    res = static_cast<ROBOT::ACTION>(dir);
-                    break;
-                }
+        Coord next_dir = frontier_path[0];
+        for (int dir = 0; dir < 4; dir++) {
+            if (robot.get_coord() + directions[dir] == next_dir) {
+                res = static_cast<ROBOT::ACTION>(dir);
+                break;
             }
-            drone_path[robot.id].pop();
         }
-
         return res;
     }
 
