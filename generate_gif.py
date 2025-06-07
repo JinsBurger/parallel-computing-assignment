@@ -215,8 +215,9 @@ class MAP_GIF:
         fig.text(0.5, 0.15, f"Observed: {observed_cnt} / {real_width}x{real_width} (%.2f%%)"%((observed_cnt/real_width**2)*100), ha='center', fontsize=7)
         if "max" in latest_task_info:
           tasks = task_info['tasks']
+          done_tasks = [t for t in tasks if tasks[t]['done']]
           fig.text(0.5, 0.1, f"Found tasks(MAX: {task_info['max']}): {task_info['found']} / {task_info['created']}", ha='center', fontsize=7)
-          fig.text(0.5, 0.05, f"Not Found: {','.join([t for t in tasks if not tasks[t]['found']])}", ha='center', fontsize=7)
+          fig.text(0.5, 0.05, f"Finished {len(done_tasks)}: {','.join(done_tasks)}", ha='center', fontsize=7)
         fig.canvas.draw()
         img = np.array(fig.canvas.buffer_rgba())
         img = Image.fromarray(img)
@@ -250,7 +251,7 @@ def parse_task(lines):
         task_id = "T%02d"%int(t_info.group(1))
         task_x, task_y = t_info.group(2), t_info.group(3)
         task_found = t_info.group(4) == "True"
-        task_done = t_info.group(5)
+        task_done = t_info.group(5) == "True"
         task_assigned = t_info.group(6)
         tasks[task_id] ={
             "found": task_found,
@@ -273,7 +274,7 @@ def parse_task(lines):
     return task_info
 
 if __name__ == '__main__':
-    os.system(f"./MRTA parse | tee {MRTA_LOG_PATH} ")
+    #os.system(f"./MRTA parse | tee {MRTA_LOG_PATH} ")
     input("Enter after MRTA is finished")
     MAP_SIZE = 20
     map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, drones=['RD0', 'RD3'])
