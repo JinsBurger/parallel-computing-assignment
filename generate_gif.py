@@ -72,12 +72,12 @@ def get_dark_colors(threshold=0.6):
 
 
 class MAP_GIF:
-    def __init__(self, filename, map_size, traces=[]):
+    def __init__(self, filename, map_size, drones=[]):
         self.frames = []
         self.filename = filename
         self.map_size = map_size
         self.trace_map = [[0 for _ in range(map_size)] for _ in range(map_size)]
-        self.traces = {}
+        self.drones_color = {}
         self.zorder = {
             "WALL": 100,
             "OBSERVED": 100,
@@ -91,9 +91,9 @@ class MAP_GIF:
         color_names.remove("black")
         color_names.remove("red")
 
-        for t in traces:
+        for t in drones:
             color = random.choice(color_names)
-            self.traces[t] = color
+            self.drones_color[t] = color
             color_names.remove(color)
 
     def get_direction_type(self, last_pos, next_pos):
@@ -105,7 +105,7 @@ class MAP_GIF:
         else:
             return "ERR"
 
-    def add_object_map(self, tick, map, observed_cnt, task_info, latest_robot_path):
+    def add_object_map(self, tick, map, observed_cnt, task_info, latest_robot_dstar, latest_drone_dstar):
         print(f"TICK: {tick}")
       
 
@@ -138,7 +138,7 @@ class MAP_GIF:
               if r_name not in ["T", "WAL"]:
                 r_id = obj_name[len(r_name):]
                 robots[int(r_id)] = [j,i]
-            if obj_name in self.traces.keys():
+            if obj_name in self.drones_color.keys():
                 self.trace_map[j][i] = obj_name
 
             if obj_name == "WAL":
@@ -150,7 +150,7 @@ class MAP_GIF:
                   ax.text(j, i, obj_name, ha='center', va='center', fontsize=3, family='monospace', zorder=self.zorder["TEXT"])
             else:
               if self.trace_map[j][i] != 0:
-                ax.add_patch(plt.Rectangle((j - 0.4, i - 0.4), 0.8, 0.8, color=self.traces[self.trace_map[j][i]], zorder=self.zorder["TRACE"]))
+                ax.add_patch(plt.Rectangle((j - 0.4, i - 0.4), 0.8, 0.8, color=self.drones_color[self.trace_map[j][i]], zorder=self.zorder["TRACE"]))
 
               # Observed task
               if obj != '':
@@ -181,18 +181,27 @@ class MAP_GIF:
 
 
         ## Print robot path
-        for r_id in latest_robot_path:
-          path = latest_robot_path[r_id]
+        full_dstar = {}
+        full_dstar.update(latest_robot_dstar)
+        full_dstar.update(latest_drone_dstar)
+        for r_id in full_dstar:
+          if r_id in latest_robot_dstar:
+              path = latest_robot_dstar[r_id]
+              color = 'green'
+          else:
+              path = latest_drone_dstar[r_id]
+              color = self.drones_color[f"RD{r_id}"]
+              
           
           for (y1, x1), (y2, x2) in zip(path, path[1:]):
               real_y1 = self.map_size - y1 - 1
               real_y2 = self.map_size - y2 - 1
 
               if y1 == y2 or x1 == x2:
-                ax.plot([x1, x2], [real_y1, real_y2], color='green', linewidth=1,  zorder=self.zorder["ROBOT_LINE"])  # straight
+                ax.plot([x1, x2], [real_y1, real_y2], color=color, linewidth=1,  zorder=self.zorder["ROBOT_LINE"])  # straight
               else:        
-                  ax.plot([x1, x2], [real_y1, real_y1], color='green', linewidth=1, zorder=self.zorder["ROBOT_LINE"])
-                  ax.plot([x2, x2], [real_y1, real_y2], color='green', linewidth=1, zorder=self.zorder["ROBOT_LINE"])
+                  ax.plot([x1, x2], [real_y1, real_y1], color=color, linewidth=1, zorder=self.zorder["ROBOT_LINE"])
+                  ax.plot([x2, x2], [real_y1, real_y2], color=color, linewidth=1, zorder=self.zorder["ROBOT_LINE"])
               
         plt.tight_layout(pad=0)
         
@@ -263,7 +272,7 @@ if __name__ == '__main__':
     os.system(f"./MRTA parse > {MRTA_LOG_PATH}")
 
     MAP_SIZE = 20
-    map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, traces=['RD0', 'RD3'])
+    map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, drones=['RD0', 'RD3'])
 
     with open(MRTA_LOG_PATH, "r") as f:
         map_flag = False
@@ -271,9 +280,11 @@ if __name__ == '__main__':
         task_flag = False
         task_lines = []
         latest_task_info = {}
-        latest_robot_path = {}
+        latest_robot_dstar = {}
         robot_path_flag = False
 
+        latest_drone_frontier_path = {}
+        drone_path_flag = False
 
         tick = 0
         for l in f.read().splitlines():        
@@ -294,15 +305,16 @@ if __name__ == '__main__':
             elif l.startswith("End Object map"):
                 observed_cnt = int(l[len("End Object map: "):])
                 map_flag = False
-                map_gif.add_object_map(tick, parse_map(map_lines), observed_cnt, latest_task_info, latest_robot_path)
+                map_gif.add_object_map(tick, parse_map(map_lines), observed_cnt, latest_task_info, latest_robot_dstar, latest_drone_frontier_path)
                 
-                # if(len(latest_robot_path) > 0):
+                # if(len(latest_robot_dstar) > 0):
                 #     map_gif.save()
                 #     exit(-1)
                 
                 map_lines = []
-                latest_robot_path = {}
+                latest_robot_dstar = {}
                 task_lines = []
+                latest_drone_frontier_path = {}
               
             elif l.startswith("Robot Path Info"):
                 robot_path_flag = True
@@ -314,7 +326,18 @@ if __name__ == '__main__':
                 r_id, path = l.split(":")
                 path = [list(map(int, c.strip()[1:-1].split(","))) for c in path.strip().split("|")[:-1]]
                 if len(path) > 0:
-                  latest_robot_path[int(r_id)] = path
+                  latest_robot_dstar[int(r_id)] = path
+            
+            elif l.startswith("Drone Path End"):
+                drone_path_flag = False
+            elif l.startswith("Drone Path Info"):
+                drone_path_flag = True
+            elif drone_path_flag:
+                r_id, path = l.split(":")
+                path = [list(map(int, c.strip()[1:-1].split(","))) for c in path.strip().split("|")[:-1]]
+                if len(path) > 0:
+                  latest_drone_frontier_path[int(r_id)] = path
+                
 
             elif map_flag:
                 if len(l) > 0 and not (l.startswith("0-") or l.startswith("  ")):
