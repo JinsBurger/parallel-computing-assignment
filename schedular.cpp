@@ -1040,39 +1040,39 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     Coord curr = robot.get_coord();
 
     // If the percent of observed map is more than 80%, GO BACK
-    // if(map_manager.observed_pt() > 0.8) {
-    //     vector<Coord> path;
-    //     if(drone_mode[robot.id] == DRONE_MODE::GOBACK && drone_inflect_dst[robot.id] != robot.get_coord()) {
-    //         TaskDstarLite tmp_dstar(drone_inflect_dst[robot.id].x, drone_inflect_dst[robot.id].y, map_manager);
-    //         tmp_dstar.calculate_cost(curr, robot.type, path);
-    //         for (int dir = 0; dir < 4; dir++) {
-    //             if (robot.get_coord() + directions[dir] == path[0]) {
-    //                 return static_cast<ROBOT::ACTION>(dir);
-    //             }
-    //         }
+    if(map_manager.observed_pt() > 0.8) {
+        vector<Coord> path;
+        if(drone_mode[robot.id] == DRONE_MODE::GOBACK && drone_inflect_dst[robot.id] != robot.get_coord()) {
+            TaskDstarLite tmp_dstar(drone_inflect_dst[robot.id].x, drone_inflect_dst[robot.id].y, map_manager);
+            tmp_dstar.calculate_cost(curr, robot.type, path);
+            for (int dir = 0; dir < 4; dir++) {
+                if (robot.get_coord() + directions[dir] == path[0]) {
+                    return static_cast<ROBOT::ACTION>(dir);
+                }
+            }
             
-    //     } else {
-    //         if(drone_inflection_points[robot.id].size() > 0) {
-    //             // Find closest path and remove it from list
-    //             auto &df_pts = drone_inflection_points[robot.id];
-    //             Coord closest = find_closest_coord(df_pts, robot.get_coord());
-    //             df_pts.erase(remove(df_pts.begin(), df_pts.end(), closest), df_pts.end());
+        } else {
+            if(drone_inflection_points[robot.id].size() > 0) {
+                // Find closest path and remove it from list
+                auto &df_pts = drone_inflection_points[robot.id];
+                Coord closest = find_closest_coord(df_pts, robot.get_coord());
+                df_pts.erase(remove(df_pts.begin(), df_pts.end(), closest), df_pts.end());
 
-    //             TaskDstarLite tmp_dstar(closest.x, closest.y, map_manager);
-    //             tmp_dstar.calculate_cost(curr, robot.type, path);
-    //             drone_inflect_dst[robot.id] = closest;
-    //             drone_mode[robot.id] = DRONE_MODE::GOBACK;
-    //             for (int dir = 0; dir < 4; dir++) {
-    //                 if (robot.get_coord() + directions[dir] == path[0]) {
-    //                     return static_cast<ROBOT::ACTION>(dir);
-    //                 }
-    //             }
+                TaskDstarLite tmp_dstar(closest.x, closest.y, map_manager);
+                tmp_dstar.calculate_cost(curr, robot.type, path);
+                drone_inflect_dst[robot.id] = closest;
+                drone_mode[robot.id] = DRONE_MODE::GOBACK;
+                for (int dir = 0; dir < 4; dir++) {
+                    if (robot.get_coord() + directions[dir] == path[0]) {
+                        return static_cast<ROBOT::ACTION>(dir);
+                    }
+                }
 
-    //         } else {
-    //             drone_mode[robot.id] = DRONE_MODE::DFS;
-    //         }
-    //     }
-    // }
+            } else {
+                drone_mode[robot.id] = DRONE_MODE::DFS;
+            }
+        }
+    }
 
 
 
