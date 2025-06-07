@@ -1044,7 +1044,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             if (!visited[id][next.x][next.y]) {
                 int cnt = 0;
                 for (int i = -2; i <= 2; ++i) {
-                    for (int j = 3; j <= 4; ++j) {
+                    for (int j = 2; j <= 3; ++j) {
                         Coord check = next;
                         if (dir == 0) check = {next.x + i, next.y + j};
                         else if (dir == 1) check = {next.x + i, next.y - j};
