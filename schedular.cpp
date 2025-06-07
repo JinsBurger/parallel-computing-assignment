@@ -1211,19 +1211,29 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         return static_cast<ROBOT::ACTION>(best_dir);
     }
 
-    // frontier 탐색 과정
+    // BFS 기반으로 가까운 frontier 탐색 (but only determine target coord)
+    queue<Coord> q;
+    map<Coord, Coord> parent;
+    set<Coord> visited_bfs;
     Coord nearest_frontier = {-1, -1};
-    int min_dist = 1e9;
-    for (int x = 0; x < map_size; ++x) {
-        for (int y = 0; y < map_size; ++y) {
-            Coord c{x, y};
-            if (visited[id][x][y] && is_frontier(c, known_object_map, map_size)) {
-                int dist = abs(curr.x - x) + abs(curr.y - y);
-                if (dist < min_dist) {
-                    min_dist = dist;
-                    nearest_frontier = c;
-                }
-            }
+
+    q.push(curr);
+    visited_bfs.insert(curr);
+
+    while (!q.empty()) {
+        Coord here = q.front(); q.pop();
+        if (is_frontier(here, known_object_map, map_size)) {
+            nearest_frontier = here;
+            break;
+        }
+        for (int d = 0; d < 4; ++d) {
+            Coord next = here + directions[d];
+            if (!is_valid_coord(next, map_size)) continue;
+            if (known_object_map[next.x][next.y] == OBJECT::WALL) continue;
+            if (visited_bfs.count(next)) continue;
+            visited_bfs.insert(next);
+            parent[next] = here;
+            q.push(next);
         }
     }
 
@@ -1247,6 +1257,18 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             drone_stack[id].push(curr);
             cout << "[Drone " << id << "] DFS fallback → Move to frontier at " << next << " dir=" << dir << endl;
             return static_cast<ROBOT::ACTION>(dir);
+        }
+    }
+
+    // Backtrack if no unexplored neighbors
+    if (!drone_stack[id].empty()) {
+        Coord parent = drone_stack[id].top();
+        drone_stack[id].pop();
+        for (int dir = 0; dir < 4; ++dir) {
+            if (curr + directions[dir] == parent) {
+                cout << "[Drone " << id << "] Final fallback → Backtrack to " << parent << " dir=" << dir << endl;
+                return static_cast<ROBOT::ACTION>(dir);
+            }
         }
     }
 
