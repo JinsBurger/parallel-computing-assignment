@@ -859,15 +859,15 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             if((robotPtr->type != ROBOT::TYPE::DRONE) && (robotPath[i].size()==0)){
                 int best_di=0, best_cost=INFINITE;
                 for(int di=1; di < drone_info.size(); di++){
-                    TaskDstarLite tmp_dstar(drone_info.front().second.x, drone_info.front().second.y, map_manager);
+                    TaskDstarLite tmp_dstar(drone_info[di].second.x, drone_info[di].second.y, map_manager);
                     vector<Coord> follow_drone_path;
-                    int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), ROBOT::TYPE::DRONE, follow_drone_path);
+                    int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), robotPtr->type, follow_drone_path);
 
                     if(av!=-1 && best_cost > av) best_di = di;
                 }
                 TaskDstarLite tmp_dstar(drone_info[best_di].second.x, drone_info[best_di].second.y, map_manager);
                 vector<Coord> follow_drone_path;
-                int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), ROBOT::TYPE::DRONE, follow_drone_path);
+                int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), robotPtr->type, follow_drone_path);
 
                 for(Coord coord : follow_drone_path){
                     if(robot_task.find(robotPtr->id)==robot_task.end()){
