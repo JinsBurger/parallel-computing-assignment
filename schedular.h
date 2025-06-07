@@ -13,23 +13,25 @@ using namespace std;
 const uint32_t g_infinity_cost = 0x13371337; //Must be not negative-range of INT
 
 class MapManager {
-    public:
-    int tick;
-    int w, h;
-    vector<vector<int>> observed_map;
-    vector<Coord> latest_observed_coords;
-    vector<vector<OBJECT>> object_map;
-    map<OBJECT, vector<Coord>> objects;
-    map<ROBOT::TYPE, int> avg_costs;
-    int certain_coordN;
+   public:
+   int tick;
+   int w, h;
+   vector<vector<int>> observed_map;
+   vector<Coord> latest_observed_coords;
+   vector<vector<OBJECT>> object_map;
+   map<OBJECT, vector<Coord>> objects;
+   map<ROBOT::TYPE, int> avg_costs;
+   int certain_coordN;
+   int observedN;
 
-    MapManager();
+   MapManager();
 
-    int update_map_info(vector<vector<OBJECT>>, vector<vector<vector<int>>>, set<Coord>, set<Coord>);
-    int cost_at(Coord, ROBOT::TYPE);
+   int update_map_info(vector<vector<OBJECT>>, vector<vector<vector<int>>>, set<Coord>, set<Coord>);
+   int cost_at(Coord, ROBOT::TYPE);
+   double observed_pt();
 
-    private:
-    vector<vector<vector<int>>> cost_map;
+   private:
+   vector<vector<vector<int>>> cost_map;
 };
 
 
@@ -52,7 +54,6 @@ struct Key {
     bool operator<(Key const & rhs) const {
         return tie(this->key1, this->key2) < tie(rhs.key1, rhs.key2);
     } 
-\
 };
 
 class DStarRobot {

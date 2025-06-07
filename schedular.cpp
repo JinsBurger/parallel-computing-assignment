@@ -12,7 +12,7 @@
 
 using namespace std;
 
-MapManager::MapManager(): tick(0) {}
+MapManager::MapManager(): tick(0), certain_coordN(0), observedN(0) {}
 
 
 int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector<vector<int>>> cost_map, set<Coord> observed_coords, set<Coord> updated_coords) {
@@ -36,6 +36,7 @@ int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector
                 avg_costs[ROBOT::TYPE::DRONE] += cost_map[coord.x][coord.y][static_cast<int>(ROBOT::TYPE::DRONE)];
                 certain_coordN += 1;
             }
+            observedN += 1;
         }
         this->observed_map[coord.x][coord.y] = tick;
         this->objects[object_map[coord.x][coord.y]].push_back(coord);   
@@ -54,7 +55,9 @@ int MapManager::cost_at(Coord pos, ROBOT::TYPE type) {
     return cost;
 }
 
-
+double MapManager::observed_pt() {
+    return (double)observedN / (double)(w*h);
+}
 
 
 /* 
@@ -725,10 +728,14 @@ MapManager map_manager;
 static map<int, vector<vector<int>>> last_seen_time;
 map<int, queue<Coord>> robot_task;
 map<int, vector<Coord>> drone_path;
+
+map<int, vector<Coord>> drone_inflection_points;
+map<int, Coord> drone_inflect_dst;
+
 map<int,int> record_start;
 map<int,Coord> record_target_coord;
 enum DRONE_MODE {
-    DFS, FRONTIER, WORK_DONE
+    NOT_INIT, DFS, FRONTIER, WORK_DONE, GOBACK
 };
 map<int, DRONE_MODE> drone_mode;
 map<int, Coord> best_frontiers;
@@ -979,6 +986,26 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
 
 }
 
+void record_the_inflection(int robot_id, Coord c) {
+    drone_inflection_points[robot_id].push_back(c);
+}
+
+Coord find_closest_coord(vector<Coord> &coords, Coord cur) {
+    Coord closest;
+    int best;
+    assert(coords.size() > 0);
+    closest = {INFINITE, INFINITE};
+    best = INFINITE;
+    for(auto target : coords) {
+        int d = abs(target.x - cur.x) + abs(target.y - cur.y);
+        if(best > d) {
+            best = d;
+            closest = target;
+        }
+    }
+
+    return closest;
+}
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const set<Coord> &updated_coords,
@@ -1007,10 +1034,49 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         return res;
     }
 
-    // DRONE
+    /************** DRONE **************/
     int map_size = static_cast<int>(known_object_map.size());
     int id = robot.id;
     Coord curr = robot.get_coord();
+
+    // If the percent of observed map is more than 80%, GO BACK
+    // if(map_manager.observed_pt() > 0.8) {
+    //     vector<Coord> path;
+    //     if(drone_mode[robot.id] == DRONE_MODE::GOBACK && drone_inflect_dst[robot.id] != robot.get_coord()) {
+    //         TaskDstarLite tmp_dstar(drone_inflect_dst[robot.id].x, drone_inflect_dst[robot.id].y, map_manager);
+    //         tmp_dstar.calculate_cost(curr, robot.type, path);
+    //         for (int dir = 0; dir < 4; dir++) {
+    //             if (robot.get_coord() + directions[dir] == path[0]) {
+    //                 return static_cast<ROBOT::ACTION>(dir);
+    //             }
+    //         }
+            
+    //     } else {
+    //         if(drone_inflection_points[robot.id].size() > 0) {
+    //             // Find closest path and remove it from list
+    //             auto &df_pts = drone_inflection_points[robot.id];
+    //             Coord closest = find_closest_coord(df_pts, robot.get_coord());
+    //             df_pts.erase(remove(df_pts.begin(), df_pts.end(), closest), df_pts.end());
+
+    //             TaskDstarLite tmp_dstar(closest.x, closest.y, map_manager);
+    //             tmp_dstar.calculate_cost(curr, robot.type, path);
+    //             drone_inflect_dst[robot.id] = closest;
+    //             drone_mode[robot.id] = DRONE_MODE::GOBACK;
+    //             for (int dir = 0; dir < 4; dir++) {
+    //                 if (robot.get_coord() + directions[dir] == path[0]) {
+    //                     return static_cast<ROBOT::ACTION>(dir);
+    //                 }
+    //             }
+
+    //         } else {
+    //             drone_mode[robot.id] = DRONE_MODE::DFS;
+    //         }
+    //     }
+    // }
+
+
+
+    // Scan MAP with DFS & FRONTIER
     drone_stack[id].push_back(curr);
 
     if (!initialized[id]) {
@@ -1018,12 +1084,14 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         visited[id] = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
         drone_mode[robot.id] = DRONE_MODE::DFS;
         std::cout << "[Drone " << id << "] Initialized at " << curr << endl;
+        record_the_inflection(robot.id, curr);
     }
 
     visited[id][curr.x][curr.y] = true;
 
     if((drone_mode[robot.id] == DRONE_MODE::FRONTIER) && (best_frontiers[robot.id].x == curr.x) && (best_frontiers[robot.id].y == curr.y)){
         drone_mode[robot.id] = DRONE_MODE::DFS;
+        record_the_inflection(robot.id, curr);
     }
 
     if(drone_mode[robot.id] == DRONE_MODE::DFS){
@@ -1123,6 +1191,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                 drone_mode[robot.id] = DRONE_MODE::WORK_DONE;
             } else {
                 best_frontiers[robot.id] = best_frontier;
+                record_the_inflection(robot.id, curr);
             }
         }
     }
