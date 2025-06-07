@@ -6,6 +6,7 @@
 #include <vector>
 #include <queue>
 #include <limits>
+#include <deque>
 #include <assert.h>
 
 
@@ -733,6 +734,21 @@ map<int, DRONE_MODE> drone_mode;
 map<int, Coord> best_frontiers;
 int last_task_reach_tick = -1;
 
+
+
+// 방향 벡터: 상, 하, 좌, 우
+static const Coord directions[4] = {
+    {0, 1},  // UP
+    {0, -1}, // DOWN
+    {-1, 0}, // LEFT
+    {1, 0}   // RIGHT
+};
+
+static map<int, deque<Coord>> drone_stack;
+static map<int, vector<vector<bool>>> visited;
+static map<int, bool> initialized;
+
+
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const set<Coord> &updated_coords,
                                 const vector<vector<vector<int>>> &known_cost_map,
@@ -855,31 +871,6 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
         }
         
         i=0;
-        for(const auto& robotPtr : robots){
-            if((robotPtr->type != ROBOT::TYPE::DRONE) && (robotPath[i].size()==0)){
-                int best_di=-1, best_cost=INFINITE;
-                for(int di=0; di < drone_info.size(); di++){
-                    TaskDstarLite tmp_dstar(drone_info[di].second.x, drone_info[di].second.y, map_manager);
-                    vector<Coord> follow_drone_path;
-                    int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), robotPtr->type, follow_drone_path);
-
-                    if(av!=-1 && best_cost > av) best_di = di;
-                }
-                if(best_di==-1) continue;
-                TaskDstarLite tmp_dstar(drone_info[best_di].second.x, drone_info[best_di].second.y, map_manager);
-                vector<Coord> follow_drone_path;
-                int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), robotPtr->type, follow_drone_path);
-
-                for(Coord coord : follow_drone_path){
-                    if(robot_task.find(robotPtr->id)==robot_task.end()){
-                        queue<Coord> tmp;
-                        tmp.push(coord);
-                    }
-                    else robot_task[robotPtr->id].push(coord);
-                }
-            }
-            if(robotPtr->type != ROBOT::TYPE::DRONE) i++;
-        }
 
         printf("robot_task created\n");
     }
@@ -912,18 +903,6 @@ bool Scheduler::on_task_reached(const set<Coord> &observed_coords,
     }
     return res;
 }
-
-// 방향 벡터: 상, 하, 좌, 우
-static const Coord directions[4] = {
-    {0, 1},  // UP
-    {0, -1}, // DOWN
-    {-1, 0}, // LEFT
-    {1, 0}   // RIGHT
-};
-
-static map<int, stack<Coord>> drone_stack;
-static map<int, vector<vector<bool>>> visited;
-static map<int, bool> initialized;
 
 // Helper: Check if coord is inside map bounds
 bool is_valid_coord(const Coord& c, int map_size) {
@@ -1018,7 +997,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     int map_size = static_cast<int>(known_object_map.size());
     int id = robot.id;
     Coord curr = robot.get_coord();
-    drone_stack[id].push(curr);
+    drone_stack[id].push_back(curr);
 
     if (!initialized[id]) {
         initialized[id] = true;
@@ -1162,9 +1141,9 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     }
 
     if(drone_mode[robot.id] == DRONE_MODE::WORK_DONE){
-        drone_stack[id].pop();
+        drone_stack[id].pop_back();
         if (!drone_stack[id].empty()) {
-            Coord parent = drone_stack[id].top();
+            Coord parent = drone_stack[id].back();
             for (int dir = 0; dir < 4; ++dir) {
                 if (curr + directions[dir] == parent) {
                     cout << "[Drone " << id << "] Final fallback → Backtrack to " << parent << " dir=" << dir << endl;
