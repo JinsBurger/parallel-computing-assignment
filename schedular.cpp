@@ -1123,6 +1123,7 @@ enum DRONE_MODE {
     DFS, FRONTIER, WORK_DONE
 };
 map<int, DRONE_MODE> drone_mode;
+Coord best_frontier = {-1, -1};
 
 ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const set<Coord> &updated_coords,
@@ -1165,7 +1166,10 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     }
 
     visited[id][curr.x][curr.y] = true;
-    Coord best_frontier = {-1, -1};
+
+    if((drone_mode[robot.id] == DRONE_MODE::FRONTIER) && (best_frontier.x == curr.x) && (best_frontier.y == curr.y)){
+        drone_mode[robot.id] = DRONE_MODE::DFS;
+    }
 
     if(drone_mode[robot.id] == DRONE_MODE::DFS){
         vector<int> candidate_dir;
@@ -1240,6 +1244,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         else{
             // If no unexplored neighbors, try to find a frontier
             drone_mode[robot.id] = DRONE_MODE::FRONTIER;
+            best_frontier = {-1, -1};
             
             int best_score = -1;
             Coord other_drone = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
@@ -1257,12 +1262,13 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             }
             std::cout << "[Drone " << id << "] Best frontier: " << best_frontier << " with score " << best_score << endl;
 
-            if(best_frontier.x == 1){
+            if(best_frontier.x == -1){
                 // Backtrack if no unexplored neighbors
                 drone_mode[robot.id] = DRONE_MODE::WORK_DONE;
             }
         }
     }
+
 
     if(drone_mode[robot.id] == DRONE_MODE::FRONTIER){
         TaskDstarLite tmp_dstar(best_frontier.x, best_frontier.y, map_manager);
