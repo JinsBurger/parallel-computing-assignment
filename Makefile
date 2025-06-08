@@ -1,5 +1,5 @@
 CXX = clang++
-CXXFLAGS = -std=c++14 -Wall -Wextra -I. #-DDSTAR_VERBOSE
+CXXFLAGS = -std=c++14 -Wall -Wextra -I.  -g#-DDSTAR_VERBOSE
 SRCS = main.cpp simulator.cpp schedular.cpp
 OBJS = $(SRCS:.cpp=.o)
 TARGET = MRTA
