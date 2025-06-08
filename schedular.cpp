@@ -942,7 +942,6 @@ int get_env_or_default(const char* name, int default_value) {
     return default_value;
 }
 
-int g_exhausted_percent;
 
 // Helper: Compute frontier score (higher is better)
 int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vector<vector<int>>& observed_map,
@@ -995,7 +994,6 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
     int robot_dist_weight      = get_env_or_default("WEIGHT_DIST_ROBOT", 3);
     int frontier_conflict_weight = get_env_or_default("WEIGHT_FRONTIER_CONFLICT", 8);
     int unknown_count_weight   = get_env_or_default("WEIGHT_UNKNOWN_COUNT", 7);
-    g_exhausted_percent = get_env_or_default("WEIGHT_EXHAUSTED_PERCENT", 93);
 
     int frontier_conflict_dist = 0;
     if (is_valid_coord(other_frontier_target, map_size)) {
@@ -1058,9 +1056,10 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         bool drone_alive = true;
 
         //Check if all drones are exhausted
+        int exhausted_percent = get_env_or_default("WEIGHT_EXHAUSTED_PERCENT", 93);
         for(auto &r : robots) {
             //if(r->type == ROBOT::TYPE::DRONE && r->get_status() != ROBOT::STATUS::EXHAUSTED) {
-            if(r->type == ROBOT::TYPE::DRONE && ((double)r->get_energy() / (double)original_energy[r->id]) < 0.01*(100-g_exhausted_percent)) {
+            if(r->type == ROBOT::TYPE::DRONE && ((double)r->get_energy() / (double)original_energy[r->id]) < 0.01*(100-exhausted_percent)) {
                 drone_alive = false;
                 break;
             }
