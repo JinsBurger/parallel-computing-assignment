@@ -9,7 +9,7 @@ import datetime
 
 test_seed = list(range(0, 10000))
 
-MRTA_CMD_TEMPLATE = "WEIGHT_TICK={tick} WEIGHT_DIST_OTHER={other} WEIGHT_DIST_SELF={self} WEIGHT_DIST_ROBOT={robot} WEIGHT_FRONTIER_CONFLICT={conflict} WEIGHT_UNKNOWN_COUNT={unknown} WEIGHT_EXHAUSTED_PERCENT={exhausted} UNKNOWN_SCOPE={scope} ./MRTA parse {seed} > '{log_path}'"
+MRTA_CMD_TEMPLATE = "WEIGHT_TICK={tick} WEIGHT_DIST_OTHER={other} WEIGHT_DIST_SELF={self} WEIGHT_FRONTIER_CONFLICT={conflict} WEIGHT_UNKNOWN_COUNT={unknown} WEIGHT_EXHAUSTED_PERCENT={exhausted} UNKNOWN_SCOPE={scope} ./MRTA parse {seed} > '{log_path}'"
 
 
 def parse_latest_metrics(log_path, map_size):
@@ -46,16 +46,16 @@ def parse_latest_metrics(log_path, map_size):
 
 
 def run_for_weight(weight_set, n, map_size):
-    tick, other, self_w, robot, conflict, unknown, exhausted, scope = weight_set
+    tick, other, self_w, conflict, unknown, exhausted, scope = weight_set
     total_observed = total_found = total_total = total_completed = 0
     valid_runs = 0
 
     start_time = time.time()
     
     for i in tqdm(range(n), desc=f"WEIGHT {weight_set}", leave=False):
-        log_path = f"/tmp/MRTA_weight_{tick}_{other}_{self_w}_{robot}_{conflict}_{unknown}_{exhausted}_{scope}_run{i}.log"
+        log_path = f"/tmp/MRTA_weight_{tick}_{other}_{self_w}_{conflict}_{unknown}_{exhausted}_{scope}_run{i}.log"
         cmd = MRTA_CMD_TEMPLATE.format(
-            tick=tick, other=other, self=self_w, robot=robot,
+            tick=tick, other=other, self=self_w,
             conflict=conflict, unknown=unknown, seed=i+100, log_path=log_path, exhausted=exhausted, scope=scope
         )
 
@@ -111,20 +111,19 @@ def run_for_weight(weight_set, n, map_size):
 def main(n=100, map_size=20, max_workers=4):
     start_global = time.time()
     
-    initial_weight = (2, 6, 9, 3, 6, 3, 85, 1) # 초기 가중치 설정
+    initial_weight = (2, 6, 9, 6, 3, 85, 1) # 초기 가중치 설정
     weight_combinations = [initial_weight]
     ranges = {
         0: range(0, 3), # tick weight
         1: range(0, 3), # other weight
         2: range(0, 4), # self weight
-        3: range(0, 1), # robot weight
-        4: range(0, 3), # conflict weight
-        5: range(0, 2), # unknown count
-        6: range(0, 13, 3), # exhausted weight
-        7: range(0, 3) # scope weight
+        3: range(0, 3), # conflict weight
+        4: range(0, 2), # unknown count
+        5: range(0, 13, 3), # exhausted weight
+        6: range(0, 3) # scope weight
     }
 
-    for idx in range(8):
+    for idx in range(7):
         new_combinations = []
         for weight_set in weight_combinations:
             for delta in ranges[idx]:
@@ -150,7 +149,7 @@ def main(n=100, map_size=20, max_workers=4):
     with open("best_weight_summary.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
-            "WEIGHT_TICK", "WEIGHT_DIST_OTHER", "WEIGHT_DIST_SELF", "WEIGHT_DIST_ROBOT",
+            "WEIGHT_TICK", "WEIGHT_DIST_OTHER", "WEIGHT_DIST_SELF",
             "WEIGHT_FRONTIER_CONFLICT", "WEIGHT_UNKNOWN_COUNT",
             "AvgObserved(%)", "AvgFoundTasks", "AvgCompletedTasks"
         ])

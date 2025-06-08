@@ -990,20 +990,10 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
     
     double tick_avg = (tick_cnt > 0) ? static_cast<double>(tick_sum) / tick_cnt : 0.0;
     int dist_to_self = abs(c.x - self_coord.x) + abs(c.y - self_coord.y);
-    int min_to_robot = 0;
-    for (const auto& r : robots) {
-        if (r->type == ROBOT::TYPE::DRONE) continue;
-        Coord rc = r->get_coord();
-        int tmp = abs(c.x - rc.x) + abs(c.y - rc.y);
-        if( min_to_robot == 0 || tmp < min_to_robot) {
-            min_to_robot = tmp;
-        }
-    }
 
     int tick_weight             = get_env_or_default("WEIGHT_TICK", 2);
     int dist_to_other_weight   = get_env_or_default("WEIGHT_DIST_OTHER", 8);
     int dist_to_self_weight    = get_env_or_default("WEIGHT_DIST_SELF", 12);
-    int robot_dist_weight      = get_env_or_default("WEIGHT_DIST_ROBOT", 3);
     int frontier_conflict_weight = get_env_or_default("WEIGHT_FRONTIER_CONFLICT", 8);
     int unknown_count_weight   = get_env_or_default("WEIGHT_UNKNOWN_COUNT", 7);
 
@@ -1016,7 +1006,6 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         - (tick_avg / map_size) * tick_weight
         + dist_to_other * dist_to_other_weight
         - dist_to_self * dist_to_self_weight
-        - min_to_robot * robot_dist_weight
         + frontier_conflict_dist * frontier_conflict_weight
         + unknown_count * unknown_count_weight);
 
@@ -1024,7 +1013,6 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
          << (tick_avg / map_size) * tick_weight << " (tick_avg: " << tick_avg << ") + "
          << dist_to_other * dist_to_other_weight << " (dist_to_other: " << dist_to_other << ") - "
          << dist_to_self * dist_to_self_weight << " (dist_to_self: " << dist_to_self << ") - "
-         << min_to_robot * robot_dist_weight << " (min_to_robot: " << min_to_robot << ") + "
          << frontier_conflict_dist * frontier_conflict_weight << " (conflict_dist: " << frontier_conflict_dist << ") + "
          << unknown_count * unknown_count_weight << " (unknown7x7: " << unknown_count << ")"
          << endl;
