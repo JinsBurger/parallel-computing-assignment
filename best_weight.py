@@ -9,7 +9,7 @@ import datetime
 
 test_seed = list(range(0, 10000))
 
-MRTA_CMD_TEMPLATE = "WEIGHT_TICK={tick} WEIGHT_DIST_OTHER={other} WEIGHT_DIST_SELF={self} WEIGHT_DIST_ROBOT={robot} WEIGHT_FRONTIER_CONFLICT={conflict} WEIGHT_UNKNOWN_COUNT={unknown} ./MRTA parse {seed} > '{log_path}'"
+MRTA_CMD_TEMPLATE = "WEIGHT_TICK={tick} WEIGHT_DIST_OTHER={other} WEIGHT_DIST_SELF={self} WEIGHT_DIST_ROBOT={robot} WEIGHT_FRONTIER_CONFLICT={conflict} WEIGHT_UNKNOWN_COUNT={unknown} WEIGHT_EXHAUSTED_PERCENT={exhausted} ./MRTA parse {seed} > '{log_path}'"
 
 
 def parse_latest_metrics(log_path, map_size):
@@ -46,17 +46,17 @@ def parse_latest_metrics(log_path, map_size):
 
 
 def run_for_weight(weight_set, n, map_size):
-    tick, other, self_w, robot, conflict, unknown = weight_set
+    tick, other, self_w, robot, conflict, unknown = weight_set, exhausted = exhausted
     total_observed = total_found = total_total = total_completed = 0
     valid_runs = 0
 
     start_time = time.time()
     
     for i in tqdm(range(n), desc=f"WEIGHT {weight_set}", leave=False):
-        log_path = f"/tmp/MRTA_weight_{tick}_{other}_{self_w}_{robot}_{conflict}_{unknown}_run{i}.log"
+        log_path = f"/tmp/MRTA_weight_{tick}_{other}_{self_w}_{robot}_{conflict}_{unknown}_{exhausted}_run{i}.log"
         cmd = MRTA_CMD_TEMPLATE.format(
             tick=tick, other=other, self=self_w, robot=robot,
-            conflict=conflict, unknown=unknown, seed=i+100, log_path=log_path
+            conflict=conflict, unknown=unknown, seed=i+100, log_path=log_path, exhausted=exhausted
         )
 
         try:
