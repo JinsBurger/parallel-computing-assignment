@@ -1132,15 +1132,17 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     // Scan MAP with DFS & FRONTIER
     drone_stack[id].push_back(curr);
 
+    int is_drone = static_cast<int>(robot.type == ROBOT::TYPE::DRONE);
     if (!initialized[id]) {
         initialized[id] = true;
-        visited[id] = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
+        if(visited[is_drone].size() == 0)
+            visited[is_drone] = vector<vector<bool>>(map_size, vector<bool>(map_size, false));
         drone_mode[robot.id] = DRONE_MODE::DFS;
         std::cout << "[Drone " << id << "] Initialized at " << curr << endl;
         record_the_inflection(robot.id, curr);
     }
-
-    visited[id][curr.x][curr.y] = true;
+    
+    visited[is_drone][curr.x][curr.y] = true;
 
     // if((drone_mode[robot.id] == DRONE_MODE::FRONTIER) && (best_frontiers[robot.id].x == curr.x) && (best_frontiers[robot.id].y == curr.y)){
     //     drone_mode[robot.id] = DRONE_MODE::DFS;
@@ -1160,7 +1162,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             Coord next = curr + directions[dir];
             if (!is_valid_coord(next, map_size)) continue;
             if (known_object_map[next.x][next.y] == OBJECT::WALL) continue;
-            if (!visited[id][next.x][next.y]) {
+            if (!visited[is_drone][next.x][next.y]) {
                 int cnt = 0;
                 for (int i = -2; i <= 2; ++i) {
                     for (int j = 2; j <= 3; ++j) {
