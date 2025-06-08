@@ -1,9 +1,12 @@
 import os
 import re
+import threading
 import csv
 from tqdm import tqdm
 
-MRTA_LOG_PATH = "/tmp/MRTA.log"
+
+result = {}
+result_lock = threading.Lock()
 MRTA_CMD_TEMPLATE = "WEIGHT_TICK={tick} WEIGHT_DIST_OTHER={other} WEIGHT_DIST_SELF={self} WEIGHT_DIST_ROBOT={robot} ./MRTA parse"
 
 def parse_latest_metrics(log_path, map_size):
@@ -45,6 +48,8 @@ def parse_latest_metrics(log_path, map_size):
 
 
 def run_for_weight(weight_set, n, map_size):
+    global result
+
     tick, other, self_w, robot = weight_set
     total_observed = 0
     total_found = 0
@@ -64,8 +69,9 @@ def run_for_weight(weight_set, n, map_size):
     
     for i in tqdm(range(n), desc=f"WEIGHT {weight_set}", leave=False):
         cmd = MRTA_CMD_TEMPLATE.format(tick=tick, other=other, self=self_w, robot=robot)
-        os.system(f"{cmd} > {MRTA_LOG_PATH}")
-        observed, found, total, completed = parse_latest_metrics(MRTA_LOG_PATH, map_size)
+        log_path = f"/tmp/MRTA_best_{i}_{str(weight_set)}.log"  # 고유한 로그 경로 생성
+        os.system(f"{cmd} > '{log_path}'")
+        observed, found, total, completed = parse_latest_metrics(log_path, map_size)
 
         total_observed += observed
         total_found += found
@@ -76,11 +82,14 @@ def run_for_weight(weight_set, n, map_size):
     avg_found = total_found / n
     avg_completed = total_completed / n
 
+    result_lock.acquire()
+    result[weight_set] = avg_observed, avg_found, avg_completed
+    result_lock.release()
     return avg_observed, avg_found, avg_completed
 
 
-
 def main(n, map_size):
+    global result
     # weight_combinations = [
     #     (1, 6, 8, 2),
     #     (1, 8, 6, 2),
@@ -94,18 +103,26 @@ def main(n, map_size):
         (1, 8, 6, 2),
     ]    
     output_path = "best_weight_summary.csv"
-
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["WEIGHT_TICK", "WEIGHT_DIST_OTHER", "WEIGHT_DIST_SELF", "WEIGHT_DIST_ROBOT",
                          "AvgObserved(%)", "AvgFoundTasks", "AvgCompletedTasks"])
+        
 
+        ths = []
         for weights in weight_combinations:
-            # Run the MRTA simulation for each weight set
             print(f"Running for weight set: {weights}")
-            avg_obs, avg_found, avg_comp = run_for_weight(weights, n=n, map_size=map_size)
+            th = threading.Thread(target=run_for_weight, args=(weights, n, map_size))
+            ths.append(th)
+            th.start()
+        
+        for i, th in enumerate(ths):
+            # Run the MRTA simulation for each weight set
+            weights = weight_combinations[i]
+            th.join()
+            avg_obs, avg_found, avg_comp = result[weight_combinations[i]]
             writer.writerow([*weights, f"{avg_obs:.2f}", f"{avg_found:.2f}", f"{avg_comp:.2f}"])
-            print(f"→ Result: Obs={avg_obs:.2f}%, Found={avg_found:.2f}, Completed={avg_comp:.2f}\n")
+            print(f"→ Result: {weights} -  Obs={avg_obs:.2f}%, Found={avg_found:.2f}, Completed={avg_comp:.2f}\n")
 
     print(f"\n[✓] 결과가 '{output_path}'에 저장되었습니다.")
 
