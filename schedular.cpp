@@ -1051,6 +1051,8 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                 break;
             }
         }
+
+        drone_alive =  drone_alive;//&& !(map_manager.observed_pt() < 0.3);
         
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
         if (robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()) {
