@@ -4,6 +4,7 @@ import os
 import re
 import csv
 import threading
+import time
 
 #MRTA_LOG_PATH = "/tmp/MRTA.log"
 MRTA_CMD_TEMPLATE = "./MRTA parse {seed}"
@@ -67,7 +68,14 @@ def parse_latest_metrics(log_path, map_size):
 
 def run_single_experiment(seed, map_size):
     log_path = f"/tmp/MRTA_{seed}.log"  # 고유한 로그 경로 생성
-    os.system(f"{MRTA_CMD_TEMPLATE.format(seed=seed)} > {log_path}")
+    if os.path.exists(log_path):
+        os.remove(log_path)
+    os.system(f"{MRTA_CMD_TEMPLATE.format(seed=seed)} > {log_path} &")
+    while True:
+        if os.path.exists(log_path):
+            if "Algorithm time : " in open(log_path, "r").read():
+                break
+        time.sleep(3)
     result = parse_latest_metrics(log_path, map_size)
     #os.remove(log_path)  # 로그 파일 삭제 (원하지 않으면 생략 가능)
     return result
@@ -123,4 +131,4 @@ def run_experiments_parallel(n=100, map_size=30, csv_path="mrta_summary.csv", ma
     print(f"📊 평균 WHEEL 에너지: {avg_wheel:.2f}")
 
 if __name__ == "__main__":
-    run_experiments_parallel(n=100, map_size=30, max_workers=24)
+    run_experiments_parallel(n=50, map_size=20, max_workers=10)
