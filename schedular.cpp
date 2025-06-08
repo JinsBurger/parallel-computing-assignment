@@ -1,13 +1,17 @@
+#include <cassert>
+#include <cstdlib>  // getenv
+#include <deque>
+#include <limits>
+#include <map>
+#include <memory>
+#include <queue>
+#include <random>
+#include <stack>
+#include <vector>
+
 #include "schedular.h"
 #include "simulator.h"
-#include <stack>
-#include <random>
-#include <map>
-#include <vector>
-#include <queue>
-#include <limits>
-#include <deque>
-#include <assert.h>
+
 
 
 using namespace std;
@@ -916,7 +920,6 @@ bool is_valid_coord(const Coord& c, int map_size) {
     return c.x >= 0 && c.x < map_size && c.y >= 0 && c.y < map_size;
 }
 
-#include <cstdlib> // getenv
 
 int get_env_or_default(const char* name, int default_value) {
     const char* val = std::getenv(name);
@@ -932,9 +935,9 @@ int get_env_or_default(const char* name, int default_value) {
 
 // Helper: Compute frontier score (higher is better)
 int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vector<vector<int>>& observed_map,
-                   int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots, const Coord& self_coord) {
+                   int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots,
+                   const Coord& self_coord, const Coord& other_frontier_target) {
     if (!is_valid_coord(c, map_size)) return -1;
-    //if (map[c.x][c.y] == OBJECT::WALL || map[c.x][c.y] == OBJECT::UNKNOWN) return -1;
     if (map[c.x][c.y] == OBJECT::WALL) return -1;
 
     bool has_unknown = false;
@@ -965,25 +968,32 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         }
     }
 
-    int tick_weight         = get_env_or_default("WEIGHT_TICK", 2);
+    int tick_weight         = get_env_or_default("WEIGHT_TICK", 3);
     int dist_to_other_weight = get_env_or_default("WEIGHT_DIST_OTHER", 8);
     int dist_to_self_weight  = get_env_or_default("WEIGHT_DIST_SELF", 10);
     int robot_dist_weight    = get_env_or_default("WEIGHT_DIST_ROBOT", 3);
+    int frontier_conflict_weight = get_env_or_default("WEIGHT_FRONTIER_CONFLICT", 8);
 
-    int final_score = static_cast<int>(10000 - (tick_avg / map_size) * tick_weight
-                            + dist_to_other * dist_to_other_weight
-                            - dist_to_self * dist_to_self_weight
-                            - min_to_robot * robot_dist_weight);
+    int frontier_conflict_dist = 0;
+    if (is_valid_coord(other_frontier_target, map_size)) {
+        frontier_conflict_dist = abs(c.x - other_frontier_target.x) + abs(c.y - other_frontier_target.y);
+    }
 
-    cout << "Frontier score for " << c << " = " << final_score <<" -> 10000 - "
+    int final_score = static_cast<int>(10000
+        - (tick_avg / map_size) * tick_weight
+        + dist_to_other * dist_to_other_weight
+        - dist_to_self * dist_to_self_weight
+        - min_to_robot * robot_dist_weight
+        + frontier_conflict_dist * frontier_conflict_weight);
+
+    cout << "Frontier score for " << c << " = " << final_score << " -> 10000 - "
          << (tick_avg / map_size) * tick_weight << " (tick_avg: " << tick_avg << ") + "
          << dist_to_other * dist_to_other_weight << " (dist_to_other: " << dist_to_other << ") - "
          << dist_to_self * dist_to_self_weight << " (dist_to_self: " << dist_to_self << ") - "
-         << min_to_robot * robot_dist_weight << " (min_to_robot: " << min_to_robot << ")" << endl;
+         << min_to_robot * robot_dist_weight << " (min_to_robot: " << min_to_robot << ") + "
+         << frontier_conflict_dist * frontier_conflict_weight << " (conflict_dist: " << frontier_conflict_dist << ")" << endl;
 
-    
     return static_cast<int>(final_score);
-
 }
 
 void record_the_inflection(int robot_id, Coord c) {
@@ -1190,11 +1200,19 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             Coord other_drone = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
             const auto& obs_map = map_manager.observed_map;
 
+            Coord conflict_target = {-1, -1};
+            for (const auto& [other_id, mode] : drone_mode) {
+                if (other_id != id && mode == DRONE_MODE::FRONTIER && best_frontiers.count(other_id)) {
+                    conflict_target = best_frontiers.at(other_id);
+                    break;
+                }
+            }
+
             for (int x = 0; x < map_size; ++x) {
                 for (int y = 0; y < map_size; ++y) {
                     Coord c = {x, y};
                     //if (known_object_map[x][y] == OBJECT::UNKNOWN || known_object_map[x][y] == OBJECT::WALL) continue;
-                    int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots, curr);
+                    int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots, curr, conflict_target);
                     if (score > best_score) {
                         best_score = score;
                         best_frontier = c;

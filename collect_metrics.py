@@ -125,4 +125,4 @@ def run_experiments(n=1000, map_size=30, csv_path="mrta_summary.csv"):
     print(f"📊 평균 CATERPILLAR 에너지: {avg_cat:.2f}")
     print(f"📊 평균 WHEEL 에너지: {avg_wheel:.2f}")
 
-run_experiments(n=100, map_size=20)
+run_experiments(n=100, map_size=30)
