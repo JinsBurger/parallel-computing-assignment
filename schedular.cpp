@@ -888,8 +888,23 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                 baduk[3] = {w*2/4,h*1/4}; baduk[4] = {w*2/4,h*2/4}; baduk[5] = {w*2/4,h*3/4};
                 baduk[6] = {w*3/4,h*1/4}; baduk[7] = {w*3/4,h*2/4}; baduk[8] = {w*3/4,h*3/4};
 
+                for(int j=0; j<9; j++){
+                    if(known_object_map[baduk[j].x][baduk[j].y] == OBJECT::WALL){
+                        for(int di=0; di<4; di++){
+                            int tmpx = directions[di].x + baduk[j].x;
+                            int tmpy = directions[di].y + baduk[j].y;
+                            if(known_object_map[tmpx][tmpy] != OBJECT::WALL){
+                                baduk[j] = {tmpx, tmpy};
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 int close_bi=0, bi_cost = abs(robotPtr->get_coord().x - baduk[0].x) + abs(robotPtr->get_coord().y - baduk[0].y);
+                cout << "baduk: " << baduk[0].x << " " << baduk[0].y << endl;
                 for(int bi=1; bi<9; bi++){
+                    cout << "baduk: " << baduk[bi].x << " " << baduk[bi].y << endl;
                     int tmp_cost = abs(robotPtr->get_coord().x - baduk[bi].x) + abs(robotPtr->get_coord().y - baduk[bi].y);
                     if(bi_cost > tmp_cost){
                         bi_cost = tmp_cost;
