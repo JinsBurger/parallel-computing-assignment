@@ -963,8 +963,10 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         }
     }
 
-    for (int dx = -2; dx <= 2; ++dx) {
-        for (int dy = -2; dy <= 2; ++dy) {
+    int unknown_scope = get_env_or_default("UNKNOWN_SCOPE", 2);
+
+    for (int dx = -1 * unknown_scope; dx <= unknown_scope; ++dx) {
+        for (int dy = -1 * unknown_scope; dy <= unknown_scope; ++dy) {
             Coord check = {c.x + dx, c.y + dy};
             if (!is_valid_coord(check, map_size)) continue;
             if (map[check.x][check.y] == OBJECT::UNKNOWN)
