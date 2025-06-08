@@ -1052,13 +1052,13 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     
     if (robot.type != ROBOT::TYPE::DRONE) {
         bool robot_move_flag;
-        bool drone_alive = false;
+        bool drone_alive = true;
 
         //Check if all drones are exhausted
         for(auto &r : robots) {
             //if(r->type == ROBOT::TYPE::DRONE && r->get_status() != ROBOT::STATUS::EXHAUSTED) {
-            if(r->type == ROBOT::TYPE::DRONE && ((double)r->get_energy() / (double)original_energy[r->id]) > 0.2) {
-                drone_alive = true;
+            if(r->type == ROBOT::TYPE::DRONE && ((double)r->get_energy() / (double)original_energy[r->id]) < 0.07) {
+                drone_alive = false;
                 break;
             }
         }
@@ -1142,7 +1142,12 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
 
     visited[id][curr.x][curr.y] = true;
 
-    if((drone_mode[robot.id] == DRONE_MODE::FRONTIER) && (best_frontiers[robot.id].x == curr.x) && (best_frontiers[robot.id].y == curr.y)){
+    // if((drone_mode[robot.id] == DRONE_MODE::FRONTIER) && (best_frontiers[robot.id].x == curr.x) && (best_frontiers[robot.id].y == curr.y)){
+    //     drone_mode[robot.id] = DRONE_MODE::DFS;
+    //     record_the_inflection(robot.id, curr);
+    // }
+
+    if(drone_mode[robot.id] == DRONE_MODE::FRONTIER && observed_coords.find(best_frontiers[robot.id]) != observed_coords.end()) {
         drone_mode[robot.id] = DRONE_MODE::DFS;
         record_the_inflection(robot.id, curr);
     }
