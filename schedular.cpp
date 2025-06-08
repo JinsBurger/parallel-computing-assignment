@@ -729,6 +729,8 @@ MapManager map_manager;
 // 매크로 선언 (필요 시 컴파일 시 -Dgravity_mode 추가)
 //#define gravity_mode
 
+
+map<int, int> original_energy;
 static map<int, vector<vector<int>>> last_seen_time;
 map<int, queue<Coord>> robot_task;
 map<int, vector<Coord>> drone_path;
@@ -769,7 +771,13 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
                                 const vector<shared_ptr<ROBOT>> &robots)
 {
 
+    if(map_manager.tick == 0) {
+        for(auto &r : robots) {
+            original_energy[r->id] = r->get_energy();
+        }
+    }
     map_manager.tick += 1;
+
 
     //Replanning
     int new_observed_coords = map_manager.update_map_info(known_object_map, known_cost_map, observed_coords, updated_coords);
@@ -1043,16 +1051,18 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     // WHEEL, CATERPILLAR
     
     if (robot.type != ROBOT::TYPE::DRONE) {
-        //Check if all drones are exhausted
+        bool robot_move_flag;
         bool drone_alive = false;
+
+        //Check if all drones are exhausted
         for(auto &r : robots) {
-            if(r->type == ROBOT::TYPE::DRONE && r->get_status() != ROBOT::STATUS::EXHAUSTED) {
+            //if(r->type == ROBOT::TYPE::DRONE && r->get_status() != ROBOT::STATUS::EXHAUSTED) {
+            if(r->type == ROBOT::TYPE::DRONE && ((double)r->get_energy() / (double)original_energy[r->id]) > 0.2) {
                 drone_alive = true;
                 break;
             }
         }
-
-        drone_alive =  drone_alive;//&& !(map_manager.observed_pt() < 0.3);
+        robot_move_flag = !drone_alive; //|| !(map_manager.observed_pt() > 0.8);
         
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
         if (robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()) {
@@ -1069,7 +1079,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             record_target_coord[robot.id] = robot.get_coord() + directions[static_cast<int>(res)];
             record_start[robot.id] = map_manager.tick;
             return res;
-        } else if (robot_task[robot.id].size() != 0 || drone_alive) {
+        } else if (robot_task[robot.id].size() != 0 || !robot_move_flag) {
             return res;
         }
         
