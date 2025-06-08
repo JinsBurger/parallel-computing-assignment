@@ -104,7 +104,7 @@ def run_experiments(n=1000, map_size=30, csv_path="mrta_summary.csv"):
             sum_wheel_energy += sum(w_e)
             count_wheel += len(w_e)
             
-            print(f"Run {i+1} - Energy: Caterpillar={sum(c_e)}, Wheel={sum(w_e)}")
+            print(f"Run {i+1} - Found: {found}, Completed: {completed} / Energy: Caterpillar={sum(c_e)}, Wheel={sum(w_e)}")
 
     avg_observed_ratio = total_observed_ratio / n
     avg_found_tasks = total_found_tasks / n

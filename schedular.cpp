@@ -942,13 +942,23 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
 
     bool has_unknown = false;
     int tick_sum = 0, tick_cnt = 0;
+    int unknown_count = 0;
+
+    for (int dx = -2; dx <= 2; ++dx) {
+        for (int dy = -2; dy <= 2; ++dy) {
+            Coord check = {c.x + dx, c.y + dy};
+            if (!is_valid_coord(check, map_size)) continue;
+            if (map[check.x][check.y] == OBJECT::UNKNOWN)
+                unknown_count++;
+        }
+    }
+
     for (int dx = -2; dx <= 2; ++dx) {
         for (int dy = -2; dy <= 2; ++dy) {
             Coord check = {c.x + dx, c.y + dy};
             if (!is_valid_coord(check, map_size)) continue;
             if (map[check.x][check.y] == OBJECT::UNKNOWN)
                 has_unknown = true;
-
             tick_sum += observed_map[check.x][check.y];
             tick_cnt++;
         }
@@ -968,11 +978,12 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         }
     }
 
-    int tick_weight         = get_env_or_default("WEIGHT_TICK", 3);
-    int dist_to_other_weight = get_env_or_default("WEIGHT_DIST_OTHER", 8);
-    int dist_to_self_weight  = get_env_or_default("WEIGHT_DIST_SELF", 10);
-    int robot_dist_weight    = get_env_or_default("WEIGHT_DIST_ROBOT", 3);
+    int tick_weight             = get_env_or_default("WEIGHT_TICK", 2);
+    int dist_to_other_weight   = get_env_or_default("WEIGHT_DIST_OTHER", 8);
+    int dist_to_self_weight    = get_env_or_default("WEIGHT_DIST_SELF", 12);
+    int robot_dist_weight      = get_env_or_default("WEIGHT_DIST_ROBOT", 3);
     int frontier_conflict_weight = get_env_or_default("WEIGHT_FRONTIER_CONFLICT", 8);
+    int unknown_count_weight   = get_env_or_default("WEIGHT_UNKNOWN_COUNT", 7);
 
     int frontier_conflict_dist = 0;
     if (is_valid_coord(other_frontier_target, map_size)) {
@@ -984,14 +995,17 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         + dist_to_other * dist_to_other_weight
         - dist_to_self * dist_to_self_weight
         - min_to_robot * robot_dist_weight
-        + frontier_conflict_dist * frontier_conflict_weight);
+        + frontier_conflict_dist * frontier_conflict_weight
+        + unknown_count * unknown_count_weight);
 
     cout << "Frontier score for " << c << " = " << final_score << " -> 10000 - "
          << (tick_avg / map_size) * tick_weight << " (tick_avg: " << tick_avg << ") + "
          << dist_to_other * dist_to_other_weight << " (dist_to_other: " << dist_to_other << ") - "
          << dist_to_self * dist_to_self_weight << " (dist_to_self: " << dist_to_self << ") - "
          << min_to_robot * robot_dist_weight << " (min_to_robot: " << min_to_robot << ") + "
-         << frontier_conflict_dist * frontier_conflict_weight << " (conflict_dist: " << frontier_conflict_dist << ")" << endl;
+         << frontier_conflict_dist * frontier_conflict_weight << " (conflict_dist: " << frontier_conflict_dist << ") + "
+         << unknown_count * unknown_count_weight << " (unknown7x7: " << unknown_count << ")"
+         << endl;
 
     return static_cast<int>(final_score);
 }
