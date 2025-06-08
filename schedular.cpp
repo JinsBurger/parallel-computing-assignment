@@ -1167,7 +1167,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             Coord next = curr + directions[dir];
             if (!is_valid_coord(next, map_size)) continue;
             if (known_object_map[next.x][next.y] == OBJECT::WALL) continue;
-            if(is_drone && (!visited[is_drone][next.x][next.y])){
+            if (!visited[is_drone][next.x][next.y]) {
                 int cnt = 0;
                 for (int i = -2; i <= 2; ++i) {
                     for (int j = 2; j <= 3; ++j) {
@@ -1187,27 +1187,8 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                     unexplored_count[dir] = cnt;
                 }
             }
-            else if(!visited[is_drone][next.x][next.y]){
-                int cnt = 0;
-                for (int i = -1; i <= 1; i++){
-                    for (int j = 1; j <= 2; j++){
-                        Coord check = next;
-                        if (dir == 0) check = {next.x + i, next.y + j};
-                        else if (dir == 1) check = {next.x + i, next.y - j};
-                        else if (dir == 2) check = {next.x - j, next.y + i};
-                        else check = {next.x + j, next.y + i};
-
-                        if (!is_valid_coord(check, map_size)) continue;
-                        if (known_object_map[check.x][check.y] == OBJECT::UNKNOWN)
-                            cnt++;
-                    }
-                }
-                if (cnt > 0) {
-                    candidate_dir.push_back(dir);
-                    unexplored_count[dir] = cnt;
-                }
-            }
         }
+
 
         if (!candidate_dir.empty()) {
             int best_dir = candidate_dir[0];
