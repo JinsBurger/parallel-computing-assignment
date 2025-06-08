@@ -163,4 +163,4 @@ def main(n=100, map_size=20, max_workers=4):
     print(f"\n🕒 전체 실험 소요 시간: {total_elapsed:.2f}초")
 
 if __name__ == "__main__":
-    main(n=100, map_size=20, max_workers=12)
+    main(n=100, map_size=30, max_workers=12)
