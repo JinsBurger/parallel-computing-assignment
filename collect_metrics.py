@@ -6,9 +6,6 @@ import csv
 MRTA_LOG_PATH = "/tmp/MRTA.log"
 MRTA_CMD = "./MRTA parse"
 
-
-test_seed = list(range(0, 10000))
-
 def parse_latest_metrics(log_path, map_size):
     with open(log_path, "r") as f:
         lines = f.read().splitlines()
@@ -86,7 +83,7 @@ def run_experiments(n=1000, map_size=30, csv_path="mrta_summary.csv"):
 
         for i in range(n):
             print(f"Running MRTA... ({i+1}/{n})")
-            os.system(f"{MRTA_CMD} {test_seed[i]} > {MRTA_LOG_PATH}")
+            os.system(f"{MRTA_CMD} > {MRTA_LOG_PATH}")
             observed_ratio, found, total, completed, d_e, c_e, w_e = parse_latest_metrics(MRTA_LOG_PATH, map_size)
             writer.writerow([i+1, f"{observed_ratio:.2f}", found, completed, total])
 
@@ -128,4 +125,4 @@ def run_experiments(n=1000, map_size=30, csv_path="mrta_summary.csv"):
     print(f"📊 평균 CATERPILLAR 에너지: {avg_cat:.2f}")
     print(f"📊 평균 WHEEL 에너지: {avg_wheel:.2f}")
 
-run_experiments(n=5, map_size=20)
+run_experiments(n=100, map_size=20)

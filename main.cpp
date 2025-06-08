@@ -1,5 +1,4 @@
 #include "simulator.h"
-#include <stdlib.h>
 #include "schedular.h"
 
 int main(int argc, char *argv[])
@@ -15,17 +14,12 @@ int main(int argc, char *argv[])
     set<Coord> observed_coords;
     set<Coord> updated_coords;
 
-    if(argc >= 2 && string(argv[1]) == "parse") {
+    if(argc == 2 && string(argv[1]) == "parse") {
         parse_flag = 1;
     }
 
-    unsigned seed;
-    if(argc >= 3) {
-        seed = strtol(argv[2], NULL, 16);
-    } else {
-        seed = static_cast<unsigned int>(time(NULL));
-    }
-    printf("SEED: 0%x \n", seed);
+    unsigned seed = static_cast<unsigned int>(time(NULL));
+    printf("SEED: 0x%x \n", seed);
     srand(seed);
     //srand(0x6844407a);
 
