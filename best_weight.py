@@ -65,10 +65,10 @@ def run_for_weight(weight_set, n, map_size):
 
             # 세그폴트 혹은 파일 생성 실패 체크
             if not os.path.exists(log_path):
-                print(f"[⚠️] Log file missing for seed {i}, weights {weight_set}")
+                print(f"[⚠️] Log file missing for seed {i + 100}, weights {weight_set}")
                 continue
             if "Algorithm time :" not in open(log_path).read():
-                print(f"[⚠️] Incomplete output for seed {i}, weights {weight_set}")
+                print(f"[⚠️] Incomplete output for seed {i + 100}, weights {weight_set}")
                 continue
 
             observed, found, total, completed = parse_latest_metrics(log_path, map_size)
@@ -78,6 +78,12 @@ def run_for_weight(weight_set, n, map_size):
             total_completed += completed
             valid_runs += 1
 
+            # ✅ 로그 파일 삭제
+            try:
+                os.remove(log_path)
+            except Exception as e:
+                print(f"[⚠️] Failed to delete log file {log_path}: {e}")
+                
         except Exception as e:
             print(f"[❌] Failed run {i} for weights {weight_set}: {e}")
             continue
