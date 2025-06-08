@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 result = {}
 result_lock = threading.Lock()
-MRTA_CMD_TEMPLATE = "WEIGHT_TICK={tick} WEIGHT_DIST_OTHER={other} WEIGHT_DIST_SELF={self} WEIGHT_DIST_ROBOT={robot} ./MRTA parse"
+MRTA_CMD_TEMPLATE = "WEIGHT_TICK={tick} WEIGHT_DIST_OTHER={other} WEIGHT_DIST_SELF={self} WEIGHT_DIST_ROBOT={robot} WEIGHT_FRONTIER_CONFLICT={conflict} WEIGHT_UNKNOWN_COUNT={unknown} ./MRTA parse"
 
 def parse_latest_metrics(log_path, map_size):
     with open(log_path, "r") as f:
@@ -50,7 +50,7 @@ def parse_latest_metrics(log_path, map_size):
 def run_for_weight(weight_set, n, map_size):
     global result
 
-    tick, other, self_w, robot = weight_set
+    tick, other, self_w, robot, confilct, unknown = weight_set
     total_observed = 0
     total_found = 0
     total_total = 0
@@ -68,7 +68,7 @@ def run_for_weight(weight_set, n, map_size):
     #     total_completed += completed
     
     for i in tqdm(range(n), desc=f"WEIGHT {weight_set}", leave=False):
-        cmd = MRTA_CMD_TEMPLATE.format(tick=tick, other=other, self=self_w, robot=robot)
+        cmd = MRTA_CMD_TEMPLATE.format(tick=tick, other=other, self=self_w, robot=robot, conflict=confilct, unknown=unknown)
         log_path = f"/tmp/MRTA_best_{i}_{str(weight_set)}.log"  # 고유한 로그 경로 생성
         os.system(f"{cmd} > '{log_path}'")
         observed, found, total, completed = parse_latest_metrics(log_path, map_size)
@@ -98,14 +98,34 @@ def main(n, map_size):
     #     (2, 8, 10, 4),
     #     (3, 5, 6, 2)
     # ]
-    weight_combinations = [
-        (1, 6, 8, 2),
-        (1, 8, 6, 2),
-    ]    
+    initial_weight = (2, 6, 8, 3, 6, 3)
+    weight_combinations = [initial_weight]
+
+    # 증가 범위 설정 (각 인덱스에 따라 원하는 만큼 설정 가능)
+    ranges = {
+        0: range(0, 2),   # tick
+        1: range(0, 2),   # other
+        2: range(0, 4),   # self_w
+        3: range(0, 1),   # robot
+        4: range(0, 2),   # conflict
+        5: range(0, 2),   # unknown
+    }
+
+    # 순차적으로 각 항목 증가
+    for idx in range(6):
+        print(f"Expanding dimension {idx}...")
+        new_combinations = []
+        for weight_set in weight_combinations:
+            for delta in ranges[idx]:
+                new_weight = list(weight_set)
+                new_weight[idx] += delta
+                new_combinations.append(tuple(new_weight))
+        weight_combinations = new_combinations  
+        
     output_path = "best_weight_summary.csv"
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["WEIGHT_TICK", "WEIGHT_DIST_OTHER", "WEIGHT_DIST_SELF", "WEIGHT_DIST_ROBOT",
+        writer.writerow(["WEIGHT_TICK", "WEIGHT_DIST_OTHER", "WEIGHT_DIST_SELF", "WEIGHT_DIST_ROBOT", "WEIGHT_FRONTIER_CONFLICT", "WEIGHT_UNKNOWN_COUNT",
                          "AvgObserved(%)", "AvgFoundTasks", "AvgCompletedTasks"])
         
 
