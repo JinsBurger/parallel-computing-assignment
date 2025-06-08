@@ -1,12 +1,15 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import os
 import re
 import csv
+import threading
 
-MRTA_LOG_PATH = "/tmp/MRTA.log"
-MRTA_CMD = "./MRTA parse"
+#MRTA_LOG_PATH = "/tmp/MRTA.log"
+MRTA_CMD_TEMPLATE = "./MRTA parse {seed}"
 
 test_seed = list(range(0, 10000))
+lock = threading.Lock()
 
 def parse_latest_metrics(log_path, map_size):
     with open(log_path, "r") as f:
@@ -60,71 +63,64 @@ def parse_latest_metrics(log_path, map_size):
             elif rtype == 'WHEEL':
                 wheel_energy.append(energy)
 
-    print(f"Energys - Caterpillar: {caterpillar_energy}, Wheel: {wheel_energy}")
     return latest_observed_ratio, found_tasks, total_tasks, completed_tasks, drone_energy, caterpillar_energy, wheel_energy
 
-def run_experiments(n=1000, map_size=30, csv_path="mrta_summary.csv"):
-    total_observed_ratio = 0.0
-    total_found_tasks = 0
-    total_total_tasks = 0
-    total_completed_tasks = 0
+def run_single_experiment(seed, map_size):
+    log_path = f"/tmp/MRTA_{seed}.log"  # 고유한 로그 경로 생성
+    os.system(f"{MRTA_CMD_TEMPLATE.format(seed=seed)} > {log_path}")
+    result = parse_latest_metrics(log_path, map_size)
+    #os.remove(log_path)  # 로그 파일 삭제 (원하지 않으면 생략 가능)
+    return result
 
-    max_observed_ratio = float('-inf')
-    min_observed_ratio = float('inf')
 
-    sum_drone_energy = 0
-    sum_cat_energy = 0
-    sum_wheel_energy = 0
-    count_drone = 0
-    count_cat = 0
-    count_wheel = 0
+def run_experiments_parallel(n=100, map_size=30, csv_path="mrta_summary.csv", max_workers=8):
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(run_single_experiment, test_seed[i], map_size): i+1 for i in range(n)}
 
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Run", "ObservedRatio(%)", "FoundTasks", "CompletedTasks", "TotalTasks"])
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Run", "ObservedRatio(%)", "FoundTasks", "CompletedTasks", "TotalTasks"])
 
-        for i in range(n):
-            print(f"Running MRTA... ({i+1}/{n})")
-            os.system(f"{MRTA_CMD} {test_seed[i]} > {MRTA_LOG_PATH}")
-            observed_ratio, found, total, completed, d_e, c_e, w_e = parse_latest_metrics(MRTA_LOG_PATH, map_size)
-            writer.writerow([i+1, f"{observed_ratio:.2f}", found, completed, total])
+            for future in as_completed(futures):
+                i = futures[future]
+                try:
+                    observed_ratio, found, total, completed, d_e, c_e, w_e = future.result()
+                    with lock:
+                        writer.writerow([i, f"{observed_ratio:.2f}", found, completed, total])
+                        results.append((observed_ratio, found, completed, total, d_e, c_e, w_e))
+                        print(f"Run {i} - Found: {found}, Completed: {completed}")
+                except Exception as e:
+                    print(f"Error in Run {i}: {e}")
 
-            total_observed_ratio += observed_ratio
-            total_found_tasks += found
-            total_total_tasks += total
-            total_completed_tasks += completed
+    total_observed_ratio = sum(r[0] for r in results)
+    total_found_tasks = sum(r[1] for r in results)
+    total_completed_tasks = sum(r[2] for r in results)
+    total_total_tasks = sum(r[3] for r in results)
 
-            max_observed_ratio = max(max_observed_ratio, observed_ratio)
-            min_observed_ratio = min(min_observed_ratio, observed_ratio)
+    all_d_e = sum((r[4] for r in results), [])
+    all_c_e = sum((r[5] for r in results), [])
+    all_w_e = sum((r[6] for r in results), [])
 
-            sum_drone_energy += sum(d_e)
-            count_drone += len(d_e)
-            sum_cat_energy += sum(c_e)
-            count_cat += len(c_e)
-            sum_wheel_energy += sum(w_e)
-            count_wheel += len(w_e)
-            
-            print(f"Run {i+1} - Found: {found}, Completed: {completed} / Energy: Caterpillar={sum(c_e)}, Wheel={sum(w_e)}")
+    n_runs = len(results)
+    avg_observed_ratio = total_observed_ratio / n_runs
+    avg_found_tasks = total_found_tasks / n_runs
+    avg_completed_tasks = total_completed_tasks / n_runs
+    avg_total_tasks = total_total_tasks / n_runs
+    avg_found_ratio = (avg_found_tasks / avg_total_tasks) * 100 if avg_total_tasks else 0
+    avg_completed_ratio = (avg_completed_tasks / avg_total_tasks) * 100 if avg_total_tasks else 0
 
-    avg_observed_ratio = total_observed_ratio / n
-    avg_found_tasks = total_found_tasks / n
-    avg_completed_tasks = total_completed_tasks / n
-    avg_total_tasks = total_total_tasks / n
-    avg_found_ratio = (avg_found_tasks / avg_total_tasks) * 100 if avg_total_tasks > 0 else 0.0
-    avg_completed_ratio = (avg_completed_tasks / avg_total_tasks) * 100 if avg_total_tasks > 0 else 0.0
+    avg_drone = sum(all_d_e) / len(all_d_e) if all_d_e else 0
+    avg_cat = sum(all_c_e) / len(all_c_e) if all_c_e else 0
+    avg_wheel = sum(all_w_e) / len(all_w_e) if all_w_e else 0
 
-    avg_drone = sum_drone_energy / count_drone if count_drone else 0
-    avg_cat = sum_cat_energy / count_cat if count_cat else 0
-    avg_wheel = sum_wheel_energy / count_wheel if count_wheel else 0
-
-    print(f"\n[✓] {n}회 실행 결과가 '{csv_path}'에 저장되었습니다.")
+    print(f"\n[✓] {n_runs}회 실행 결과가 '{csv_path}'에 저장되었습니다.")
     print(f"📊 평균 탐색된 맵 비율: {avg_observed_ratio:.2f}%")
-    print(f"📊 최대 탐색 비율: {max_observed_ratio:.2f}%")
-    print(f"📊 최소 탐색 비율: {min_observed_ratio:.2f}%")
     print(f"📊 평균 발견 Task 수: {avg_found_tasks:.2f} / {avg_total_tasks:.2f} ({avg_found_ratio:.2f}%)")
     print(f"📊 평균 완료 Task 수: {avg_completed_tasks:.2f} / {avg_total_tasks:.2f} ({avg_completed_ratio:.2f}%)")
     print(f"📊 평균 DRONE 에너지: {avg_drone:.2f}")
     print(f"📊 평균 CATERPILLAR 에너지: {avg_cat:.2f}")
     print(f"📊 평균 WHEEL 에너지: {avg_wheel:.2f}")
 
-run_experiments(n=100, map_size=30)
+if __name__ == "__main__":
+    run_experiments_parallel(n=100, map_size=30, max_workers=24)
