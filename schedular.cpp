@@ -743,6 +743,7 @@ enum DRONE_MODE {
 };
 map<int, DRONE_MODE> drone_mode;
 map<int, Coord> best_frontiers;
+map<int, vector<Coord>> unreachable_frontiers;
 int last_task_reach_tick = -1;
 
 
@@ -1062,7 +1063,6 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             robot_task[robot.id].pop();
         }
 
-        
         if (res != ROBOT::ACTION::HOLD) {
             record_target_coord[robot.id] = robot.get_coord() + directions[static_cast<int>(res)];
             record_start[robot.id] = map_manager.tick;
@@ -1225,6 +1225,9 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             for (int x = 0; x < map_size; ++x) {
                 for (int y = 0; y < map_size; ++y) {
                     Coord c = {x, y};
+                    if(find(unreachable_frontiers[robot.id].begin(), unreachable_frontiers[robot.id].end(), c) != unreachable_frontiers[robot.id].end()) {
+                        continue;
+                    }
                     //if (known_object_map[x][y] == OBJECT::UNKNOWN || known_object_map[x][y] == OBJECT::WALL) continue;
                     int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots, curr, conflict_target);
                     if (score > best_score) {
@@ -1256,6 +1259,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         vector<Coord> frontier_path;
         int av = tmp_dstar.calculate_cost(robot.get_coord(), robot.type, frontier_path);
         if(av == -1 || frontier_path.size() == 0){
+            unreachable_frontiers[robot.id].push_back(best_frontiers[robot.id]);
             std::cout << "[Drone " << id << "] is trapped!" << endl;
             drone_mode[robot.id] = DRONE_MODE::DFS;
             return ROBOT::ACTION::HOLD;
