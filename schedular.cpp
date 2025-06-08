@@ -754,7 +754,6 @@ static const Coord directions[4] = {
 static map<int, deque<Coord>> drone_stack;
 static map<int, vector<vector<bool>>> visited;
 static map<int, bool> initialized;
-Coord baduk[9];
 
 
 void Scheduler::on_info_updated(const set<Coord> &observed_coords,
@@ -878,55 +877,8 @@ void Scheduler::on_info_updated(const set<Coord> &observed_coords,
             cout << endl;
         }
         
-        // baduk
-/*        i=0;
-        for(const auto& robotPtr : robots){
-            if(robotPtr->type == ROBOT::TYPE::DRONE) continue;
-            if(robotPath[i].size()==0){
-                int h = map_manager.h, w = map_manager.w;
-                baduk[0] = {w*1/4,h*1/4}; baduk[1] = {w*1/4,h*2/4}; baduk[2] = {w*1/4,h*3/4};
-                baduk[3] = {w*2/4,h*1/4}; baduk[4] = {w*2/4,h*2/4}; baduk[5] = {w*2/4,h*3/4};
-                baduk[6] = {w*3/4,h*1/4}; baduk[7] = {w*3/4,h*2/4}; baduk[8] = {w*3/4,h*3/4};
+        i=0;
 
-                for(int j=0; j<9; j++){
-                    if(known_object_map[baduk[j].x][baduk[j].y] == OBJECT::WALL){
-                        for(int di=0; di<4; di++){
-                            int tmpx = directions[di].x + baduk[j].x;
-                            int tmpy = directions[di].y + baduk[j].y;
-                            if(known_object_map[tmpx][tmpy] != OBJECT::WALL){
-                                baduk[j] = {tmpx, tmpy};
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                int close_bi=0, bi_cost = abs(robotPtr->get_coord().x - baduk[0].x) + abs(robotPtr->get_coord().y - baduk[0].y);
-                cout << "baduk: " << baduk[0].x << " " << baduk[0].y << endl;
-                for(int bi=1; bi<9; bi++){
-                    cout << "baduk: " << baduk[bi].x << " " << baduk[bi].y << endl;
-                    int tmp_cost = abs(robotPtr->get_coord().x - baduk[bi].x) + abs(robotPtr->get_coord().y - baduk[bi].y);
-                    if(bi_cost > tmp_cost){
-                        bi_cost = tmp_cost;
-                        close_bi = bi;
-                    }
-                }
-
-                TaskDstarLite tmp_dstar(baduk[close_bi].x,baduk[close_bi].y, map_manager);
-                vector<Coord> baduk_path;
-                int av = tmp_dstar.calculate_cost(robotPtr->get_coord(), ROBOT::TYPE::DRONE, baduk_path);
-                for(Coord coord : baduk_path){
-                    if(robot_task.find(robotPtr->id) == robot_task.end()){
-                        queue<Coord> tmp;
-                        tmp.push(coord);
-                        robot_task[robotPtr->id] = tmp;
-                    }
-                    else robot_task[robotPtr->id].push(coord);
-                }
-            }
-            i++;
-        }
-*/
         printf("robot_task created\n");
     }
 
@@ -1064,7 +1016,17 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                                      const ROBOT &robot)
 {   
     // WHEEL, CATERPILLAR
+    
     if (robot.type != ROBOT::TYPE::DRONE) {
+        //Check if all drones are exhausted
+        bool drone_alive = false;
+        for(auto &r : robots) {
+            if(r->type == ROBOT::TYPE::DRONE && r->get_status() != ROBOT::STATUS::EXHAUSTED) {
+                drone_alive = true;
+                break;
+            }
+        }
+        
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
         if (robot_task.find(robot.id) != robot_task.end() && !robot_task[robot.id].empty()) {
             for (int dir = 0; dir < 4; dir++) {
@@ -1075,11 +1037,18 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             }
             robot_task[robot.id].pop();
         }
+
+        
         if (res != ROBOT::ACTION::HOLD) {
             record_target_coord[robot.id] = robot.get_coord() + directions[static_cast<int>(res)];
             record_start[robot.id] = map_manager.tick;
+            return res;
+        } else if (robot_task[robot.id].size() != 0 || drone_alive) {
+            return res;
         }
-        return res;
+        
+
+        // ROBOT runs drone's mechanism if all drones are dead
     }
 
     /************** DRONE **************/
@@ -1087,41 +1056,41 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
     int id = robot.id;
     Coord curr = robot.get_coord();
 
-/*    // If the percent of observed map is more than 80%, GO BACK
-    if(map_manager.observed_pt() > 0.8) {
-        vector<Coord> path;
-        if(drone_mode[robot.id] == DRONE_MODE::GOBACK && drone_inflect_dst[robot.id] != robot.get_coord()) {
-            TaskDstarLite tmp_dstar(drone_inflect_dst[robot.id].x, drone_inflect_dst[robot.id].y, map_manager);
-            tmp_dstar.calculate_cost(curr, robot.type, path);
-            for (int dir = 0; dir < 4; dir++) {
-                if (robot.get_coord() + directions[dir] == path[0]) {
-                    return static_cast<ROBOT::ACTION>(dir);
-                }
-            }
+    // If the percent of observed map is more than 80%, GO BACK
+    // if(map_manager.observed_pt() > 0.8) {
+    //     vector<Coord> path;
+    //     if(drone_mode[robot.id] == DRONE_MODE::GOBACK && drone_inflect_dst[robot.id] != robot.get_coord()) {
+    //         TaskDstarLite tmp_dstar(drone_inflect_dst[robot.id].x, drone_inflect_dst[robot.id].y, map_manager);
+    //         tmp_dstar.calculate_cost(curr, robot.type, path);
+    //         for (int dir = 0; dir < 4; dir++) {
+    //             if (robot.get_coord() + directions[dir] == path[0]) {
+    //                 return static_cast<ROBOT::ACTION>(dir);
+    //             }
+    //         }
             
-        } else {
-            if(drone_inflection_points[robot.id].size() > 0) {
-                // Find closest path and remove it from list
-                auto &df_pts = drone_inflection_points[robot.id];
-                Coord closest = find_closest_coord(df_pts, robot.get_coord());
-                df_pts.erase(remove(df_pts.begin(), df_pts.end(), closest), df_pts.end());
+    //     } else {
+    //         if(drone_inflection_points[robot.id].size() > 0) {
+    //             // Find closest path and remove it from list
+    //             auto &df_pts = drone_inflection_points[robot.id];
+    //             Coord closest = find_closest_coord(df_pts, robot.get_coord());
+    //             df_pts.erase(remove(df_pts.begin(), df_pts.end(), closest), df_pts.end());
 
-                TaskDstarLite tmp_dstar(closest.x, closest.y, map_manager);
-                tmp_dstar.calculate_cost(curr, robot.type, path);
-                drone_inflect_dst[robot.id] = closest;
-                drone_mode[robot.id] = DRONE_MODE::GOBACK;
-                for (int dir = 0; dir < 4; dir++) {
-                    if (robot.get_coord() + directions[dir] == path[0]) {
-                        return static_cast<ROBOT::ACTION>(dir);
-                    }
-                }
+    //             TaskDstarLite tmp_dstar(closest.x, closest.y, map_manager);
+    //             tmp_dstar.calculate_cost(curr, robot.type, path);
+    //             drone_inflect_dst[robot.id] = closest;
+    //             drone_mode[robot.id] = DRONE_MODE::GOBACK;
+    //             for (int dir = 0; dir < 4; dir++) {
+    //                 if (robot.get_coord() + directions[dir] == path[0]) {
+    //                     return static_cast<ROBOT::ACTION>(dir);
+    //                 }
+    //             }
 
-            } else {
-                drone_mode[robot.id] = DRONE_MODE::DFS;
-            }
-        }
-    }
-*/
+    //         } else {
+    //             drone_mode[robot.id] = DRONE_MODE::DFS;
+    //         }
+    //     }
+    // }
+
 
 
     // Scan MAP with DFS & FRONTIER
@@ -1253,8 +1222,8 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         }
         TaskDstarLite tmp_dstar(best_frontiers[robot.id].x, best_frontiers[robot.id].y, map_manager);
         vector<Coord> frontier_path;
-        int av = tmp_dstar.calculate_cost(robot.get_coord(), ROBOT::TYPE::DRONE, frontier_path);
-        if(av == -1){
+        int av = tmp_dstar.calculate_cost(robot.get_coord(), robot.type, frontier_path);
+        if(av == -1 || frontier_path.size() == 0){
             std::cout << "[Drone " << id << "] is trapped!" << endl;
             drone_mode[robot.id] = DRONE_MODE::DFS;
             return ROBOT::ACTION::HOLD;
