@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
     }
     printf("SEED: 0%x \n", seed);
     srand(seed);
-    //srand(0x54);
+    //srand(0x29);
 
     TIMER timer;
     MAP map(MAP_SIZE, NUM_ROBOT, NUM_INITIAL_TASKS, NUM_MAX_TASKS, WALL_DENSITY, ROBOT_ENERGY);

@@ -945,7 +945,7 @@ int get_env_or_default(const char* name, int default_value) {
 
 // Helper: Compute frontier score (higher is better)
 int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vector<vector<int>>& observed_map,
-                   int map_size, const Coord& other_drone, const vector<shared_ptr<ROBOT>>& robots,
+                   int map_size, const vector<shared_ptr<ROBOT>>& robots,
                    const Coord& self_coord, const Coord& other_frontier_target) {
     if (!is_valid_coord(c, map_size)) return -1;
     if (map[c.x][c.y] == OBJECT::WALL) return -1;
@@ -977,8 +977,18 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
     }
     if (!has_unknown) return -1;
 
+    int dist_to_other = -1;
+    for (const auto& r : robots) {
+        if (r->type != ROBOT::TYPE::DRONE) continue;
+        Coord rc = r->get_coord();
+        if (rc == self_coord) continue; // 본인 제외
+        int d = abs(c.x - rc.x) + abs(c.y - rc.y);
+        if (dist_to_other == -1 || d < dist_to_other)
+            dist_to_other = d;
+    }
+    if (dist_to_other == -1) dist_to_other = 0; // 다른 드론이 없을 경우
+    
     double tick_avg = (tick_cnt > 0) ? static_cast<double>(tick_sum) / tick_cnt : 0.0;
-    int dist_to_other = abs(c.x - other_drone.x) + abs(c.y - other_drone.y);
     int dist_to_self = abs(c.x - self_coord.x) + abs(c.y - self_coord.y);
     int min_to_robot = 0;
     for (const auto& r : robots) {
@@ -1236,7 +1246,6 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             Coord best_frontier = {-1, -1};
             
             int best_score = -1;
-            Coord other_drone = (robots[0]->id == id) ? robots[1]->get_coord() : robots[0]->get_coord();
             const auto& obs_map = map_manager.observed_map;
 
             Coord conflict_target = {-1, -1};
@@ -1254,7 +1263,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
                         continue;
                     }
                     //if (known_object_map[x][y] == OBJECT::UNKNOWN || known_object_map[x][y] == OBJECT::WALL) continue;
-                    int score = frontier_score(c, known_object_map, obs_map, map_size, other_drone, robots, curr, conflict_target);
+                    int score = frontier_score(c, known_object_map, obs_map, map_size, robots, curr, conflict_target);
                     if (score > best_score) {
                         best_score = score;
                         best_frontier = c;

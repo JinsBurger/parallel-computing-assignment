@@ -134,7 +134,7 @@ def main(n=100, map_size=20, max_workers=4):
         weight_combinations = new_combinations
 
     print(f"총 {len(weight_combinations)}개의 가중치 조합이 생성되었습니다.")
-    print(weight_combinations)
+    #print(weight_combinations)
     
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
