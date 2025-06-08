@@ -27,7 +27,7 @@ int MapManager::update_map_info(vector<vector<OBJECT>> object_map, vector<vector
     // Not initialized yet
     if(observed_map.size() != this->object_map.size()) {
         int wh = this->w = this->h = this->object_map.size();
-        this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -1000)); // UNKNOWN MAP tick-> -1000
+        this->observed_map = vector<vector<int>>(wh, vector<int>(wh, -50*this->w)); // UNKNOWN MAP tick-> -1000
     }
 
     for(auto coord : observed_coords) {
