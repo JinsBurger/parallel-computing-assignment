@@ -14,7 +14,7 @@ CSV_PATH = "best_weight_summary.csv"
 THRESHOLD = 9.12
 
 def load_weight_sets_from_csv(path, threshold):
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, index_col=None)
     df_filtered = df[df["AvgCompletedTasks"] >= threshold]
     subset = df_filtered.iloc[:, 0:7]
     return [tuple(row) for row in subset.values]
