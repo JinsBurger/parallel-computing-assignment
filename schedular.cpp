@@ -963,7 +963,7 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
         }
     }
 
-    int unknown_scope = get_env_or_default("UNKNOWN_SCOPE", 2);
+    int unknown_scope = get_env_or_default("UNKNOWN_SCOPE", 3);
 
     for (int dx = -1 * unknown_scope; dx <= unknown_scope; ++dx) {
         for (int dy = -1 * unknown_scope; dy <= unknown_scope; ++dy) {
@@ -991,11 +991,11 @@ int frontier_score(const Coord& c, const vector<vector<OBJECT>>& map, const vect
     double tick_avg = (tick_cnt > 0) ? static_cast<double>(tick_sum) / tick_cnt : 0.0;
     int dist_to_self = abs(c.x - self_coord.x) + abs(c.y - self_coord.y);
 
-    int tick_weight             = get_env_or_default("WEIGHT_TICK", 2);
-    int dist_to_other_weight   = get_env_or_default("WEIGHT_DIST_OTHER", 8);
-    int dist_to_self_weight    = get_env_or_default("WEIGHT_DIST_SELF", 12);
-    int frontier_conflict_weight = get_env_or_default("WEIGHT_FRONTIER_CONFLICT", 8);
-    int unknown_count_weight   = get_env_or_default("WEIGHT_UNKNOWN_COUNT", 7);
+    int tick_weight             = get_env_or_default("WEIGHT_TICK", 4);
+    int dist_to_other_weight   = get_env_or_default("WEIGHT_DIST_OTHER", 7);
+    int dist_to_self_weight    = get_env_or_default("WEIGHT_DIST_SELF", 11);
+    int frontier_conflict_weight = get_env_or_default("WEIGHT_FRONTIER_CONFLICT", 7);
+    int unknown_count_weight   = get_env_or_default("WEIGHT_UNKNOWN_COUNT", 4);
 
     int frontier_conflict_dist = 0;
     if (is_valid_coord(other_frontier_target, map_size)) {
@@ -1056,7 +1056,7 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
         bool drone_alive = true;
 
         //Check if all drones are exhausted
-        int exhausted_percent = get_env_or_default("WEIGHT_EXHAUSTED_PERCENT", 93);
+        int exhausted_percent = get_env_or_default("WEIGHT_EXHAUSTED_PERCENT", 85);
         for(auto &r : robots) {
             //if(r->type == ROBOT::TYPE::DRONE && r->get_status() != ROBOT::STATUS::EXHAUSTED) {
             if(r->type == ROBOT::TYPE::DRONE && ((double)r->get_energy() / (double)original_energy[r->id]) < 0.01*(100-exhausted_percent)) {

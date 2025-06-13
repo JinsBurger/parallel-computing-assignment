@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # 파일 경로
-file_path = 'summary_10000.csv'  # 현재 디렉토리에 있어야 함
+#file_path = 'summary_10000.csv'  # 현재 디렉토리에 있어야 함
+file_path = 'best_weight_summary2.csv' 
 
 # 데이터 로드
 df = pd.read_csv(file_path)
@@ -20,9 +21,9 @@ completed_min = df['AvgCompletedTasks'].min()
 completed_std = df['AvgCompletedTasks'].std()
 
 # 특정 임계값 이상인 샘플 개수 확인
-n = 9.05  # 원하는 값으로 수정 가능
-completed_count = (df['AvgCompletedTasks'] >= n).sum()
-print(f'AvgCompletedTasks >= {n} 인 sample 개수: {completed_count}')
+# n = 9.05  # 원하는 값으로 수정 가능
+# completed_count = (df['AvgCompletedTasks'] >= n).sum()
+# print(f'AvgCompletedTasks >= {n} 인 sample 개수: {completed_count}')
 
 # AvgFoundTasks 그래프
 plt.figure(figsize=(10, 6))

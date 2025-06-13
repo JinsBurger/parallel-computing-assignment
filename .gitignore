@@ -4,8 +4,10 @@ MRTA
 .DS_Store
 README.*
 *.csv
+*.xlsx
 *.mp4
 *.log
 main.cpp
 ex.py
 *.png
+NotoSansCJK-KR*
