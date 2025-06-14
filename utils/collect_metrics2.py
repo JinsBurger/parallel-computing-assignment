@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 #MRTA_LOG_PATH = "/tmp/MRTA.log"
-MRTA_CMD_TEMPLATE = "./MRTA parse {seed}"
+MRTA_CMD_TEMPLATE = "../MRTA parse {seed}"
 
 test_seed = list(range(1000, 10000))
 lock = threading.Lock()

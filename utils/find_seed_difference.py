@@ -6,7 +6,7 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import subprocess
 
-MRTA_CMD_TEMPLATE = "./MRTA parse {seed} > {log_path}"
+MRTA_CMD_TEMPLATE = "../MRTA parse {seed} > {log_path}"
 
 
 def parse_latest_metrics(log_path, map_size):

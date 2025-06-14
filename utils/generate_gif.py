@@ -276,7 +276,7 @@ def parse_task(lines):
     return task_info
 
 if __name__ == '__main__':
-    os.system(f"./MRTA parse | tee {MRTA_LOG_PATH} ")
+    os.system(f"../MRTA parse | tee {MRTA_LOG_PATH} ")
     input("Enter after MRTA is finished")
     MAP_SIZE = 40
     map_gif = MAP_GIF("./rd0_230.gif", MAP_SIZE, drones=['RD0', 'RD3'])
@@ -292,7 +292,7 @@ if __name__ == '__main__':
         seed = -1
 
         latest_drone_frontier_path = {}
-        drone_path_flag = False
+        g_drone_path_flag = False
 
         tick = 0
         for l in f.read().splitlines():        
@@ -340,10 +340,10 @@ if __name__ == '__main__':
                   latest_robot_dstar[int(r_id)] = path
             
             elif l.startswith("Drone Path End"):
-                drone_path_flag = False
+                g_drone_path_flag = False
             elif l.startswith("Drone Path Info"):
-                drone_path_flag = True
-            elif drone_path_flag:
+                g_drone_path_flag = True
+            elif g_drone_path_flag:
                 r_id, path = l.split(":")
                 path = [list(map(int, c.strip()[1:-1].split(","))) for c in path.strip().split("|")[:-1]]
                 if len(path) > 0:
