@@ -211,8 +211,8 @@ int observed_cnt;
 enum DRONE_MODE {
     NOT_INIT, DFS, FRONTIER, WORK_DONE, GOBACK
 };
-extern map<int, vector<Coord>> drone_path;
-extern map<int, DRONE_MODE> drone_mode;
+extern map<int, vector<Coord>> g_drone_path;
+extern map<int, DRONE_MODE> g_drone_mode;
 
 void MAP::print_object_map_if_changed(int tick) {
     if(is_object_map_changed) {
@@ -224,12 +224,12 @@ void MAP::print_object_map_if_changed(int tick) {
         print_all_robot_path();
         cout << "End Path Info: " << endl;
 
-        for(auto it = drone_mode.begin(); it != drone_mode.end(); it++) {
+        for(auto it = g_drone_mode.begin(); it != g_drone_mode.end(); it++) {
             int r_id = it->first;
-            if(drone_mode[r_id] == DRONE_MODE::FRONTIER) {
+            if(g_drone_mode[r_id] == DRONE_MODE::FRONTIER) {
                 cout << "Drone Path Info:" << endl;
                 cout << r_id << ": ";
-                for(auto path : drone_path.at(r_id)) 
+                for(auto path : g_drone_path.at(r_id)) 
                     cout << "(" << path.y  << ", " << path.x << ") | ";
                 cout << endl << "Drone Path End" << endl;
                 
@@ -246,7 +246,7 @@ void MAP::print_object_map_if_changed(int tick) {
 }
 
 
-extern map<int,queue<Coord>> robot_task;
+extern map<int,queue<Coord>> g_robot_task;
 
 template <typename T>
 std::vector<T> queueToVector(std::queue<T> q) {
@@ -260,9 +260,9 @@ std::vector<T> queueToVector(std::queue<T> q) {
 
 void MAP::print_all_robot_path() {
     for(auto r : robots) {
-        if(robot_task.find(r->id) != robot_task.end()) {
+        if(g_robot_task.find(r->id) != g_robot_task.end()) {
             cout << r->id << ": ";
-            for(auto path : queueToVector(robot_task[r->id])) {
+            for(auto path : queueToVector(g_robot_task[r->id])) {
                 cout << "(" << path.y  << ", " << path.x << ") | ";
             }
             cout << endl;
