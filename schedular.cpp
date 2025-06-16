@@ -903,6 +903,8 @@ ROBOT::ACTION Scheduler::idle_action(const set<Coord> &observed_coords,
             g_drone_mode[robot.id] = DRONE_MODE::DFS;
             return ROBOT::ACTION::HOLD;
         }
+
+        g_drone_path[robot.id] = frontier_path;
         ROBOT::ACTION res = ROBOT::ACTION::HOLD;
         Coord next_dir = frontier_path[0];
         for (int dir = 0; dir < 4; dir++) {
