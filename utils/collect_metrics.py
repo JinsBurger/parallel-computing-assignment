@@ -5,12 +5,14 @@ import re
 import csv
 import threading
 import time
+import random
 
 
 #MRTA_LOG_PATH = "/tmp/MRTA.log"
 MRTA_CMD_TEMPLATE = "../MRTA parse {seed}"
 
 test_seed = list(range(100, 10000))
+random.shuffle(test_seed)
 lock = threading.Lock()
 
 def parse_latest_metrics(log_path, map_size):
@@ -132,4 +134,4 @@ def run_experiments_parallel(n=100, map_size=30, csv_path="mrta_summary.csv", ma
     print(f"📊 평균 WHEEL 에너지: {avg_wheel:.2f}")
 
 if __name__ == "__main__":
-    run_experiments_parallel(n=100, map_size=20, max_workers=16)
+    run_experiments_parallel(n=100, map_size=30, max_workers=16)
