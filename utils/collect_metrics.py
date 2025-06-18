@@ -11,7 +11,7 @@ import random
 #MRTA_LOG_PATH = "/tmp/MRTA.log"
 MRTA_CMD_TEMPLATE = "../MRTA parse {seed}"
 
-test_seed = list(range(100, 10000))
+test_seed = list(range(3300, 3400))
 random.shuffle(test_seed)
 lock = threading.Lock()
 
